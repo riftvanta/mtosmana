@@ -32,10 +32,9 @@ export default function BankManagement() {
   // Form data for new/edit bank
   const [bankForm, setBankForm] = useState({
     name: '',
-    accountNumber: '',
+    cliqType: 'alias' as 'alias' | 'mobile',
+    cliqValue: '',
     accountHolder: '',
-    iban: '',
-    swiftCode: '',
     balance: 0,
     description: '',
     isActive: true
@@ -106,13 +105,25 @@ export default function BankManagement() {
   };
 
   const handleAddBank = async () => {
-    if (!bankForm.name || !bankForm.accountNumber || !bankForm.accountHolder) {
+    if (!bankForm.name || !bankForm.cliqValue || !bankForm.accountHolder) {
       setError('Please fill in all required fields');
       return;
     }
 
     setLoading(true);
-    const result = await createPlatformBank(bankForm);
+    const bankData = {
+      name: bankForm.name,
+      cliqDetails: {
+        type: bankForm.cliqType,
+        value: bankForm.cliqValue
+      },
+      accountHolder: bankForm.accountHolder,
+      balance: bankForm.balance,
+      description: bankForm.description,
+      isActive: bankForm.isActive
+    };
+    
+    const result = await createPlatformBank(bankData);
     
     if (result.success) {
       setSuccess('Bank added successfully');
@@ -128,7 +139,19 @@ export default function BankManagement() {
     if (!editingBank) return;
 
     setLoading(true);
-    const result = await updatePlatformBank(editingBank.id, bankForm);
+    const bankData = {
+      name: bankForm.name,
+      cliqDetails: {
+        type: bankForm.cliqType,
+        value: bankForm.cliqValue
+      },
+      accountHolder: bankForm.accountHolder,
+      balance: bankForm.balance,
+      description: bankForm.description,
+      isActive: bankForm.isActive
+    };
+    
+    const result = await updatePlatformBank(editingBank.id, bankData);
     
     if (result.success) {
       setSuccess('Bank updated successfully');
@@ -199,10 +222,9 @@ export default function BankManagement() {
   const resetBankForm = () => {
     setBankForm({
       name: '',
-      accountNumber: '',
+      cliqType: 'alias' as 'alias' | 'mobile',
+      cliqValue: '',
       accountHolder: '',
-      iban: '',
-      swiftCode: '',
       balance: 0,
       description: '',
       isActive: true
@@ -221,10 +243,9 @@ export default function BankManagement() {
     setEditingBank(bank);
     setBankForm({
       name: bank.name,
-      accountNumber: bank.accountNumber,
+      cliqType: bank.cliqDetails.type,
+      cliqValue: bank.cliqDetails.value,
       accountHolder: bank.accountHolder,
-      iban: bank.iban || '',
-      swiftCode: bank.swiftCode || '',
       balance: bank.balance,
       description: bank.description || '',
       isActive: bank.isActive
@@ -330,9 +351,8 @@ export default function BankManagement() {
                 </div>
                 
                 <div className="space-y-2 text-sm text-gray-600">
-                  <p><span className="font-medium">Account:</span> {bank.accountNumber}</p>
+                  <p><span className="font-medium">CliQ {bank.cliqDetails.type}:</span> {bank.cliqDetails.value}</p>
                   <p><span className="font-medium">Holder:</span> {bank.accountHolder}</p>
-                  {bank.iban && <p><span className="font-medium">IBAN:</span> {bank.iban}</p>}
                   <p><span className="font-medium">Balance:</span> {bank.balance.toLocaleString()}</p>
                   {bank.description && <p><span className="font-medium">Description:</span> {bank.description}</p>}
                 </div>
@@ -453,12 +473,27 @@ export default function BankManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Account Number *</label>
+                  <label className="block text-sm font-medium text-gray-700">CliQ Type *</label>
+                  <select
+                    value={bankForm.cliqType}
+                    onChange={(e) => setBankForm({ ...bankForm, cliqType: e.target.value as 'alias' | 'mobile' })}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="alias">Alias Name</option>
+                    <option value="mobile">Mobile Number</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {bankForm.cliqType === 'alias' ? 'CliQ Alias Name' : 'Mobile Number'} *
+                  </label>
                   <input
                     type="text"
-                    value={bankForm.accountNumber}
-                    onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
+                    value={bankForm.cliqValue}
+                    onChange={(e) => setBankForm({ ...bankForm, cliqValue: e.target.value })}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder={bankForm.cliqType === 'alias' ? 'e.g., MyBankAlias' : 'e.g., 07XXXXXXXX'}
                   />
                 </div>
 
@@ -468,26 +503,6 @@ export default function BankManagement() {
                     type="text"
                     value={bankForm.accountHolder}
                     onChange={(e) => setBankForm({ ...bankForm, accountHolder: e.target.value })}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">IBAN</label>
-                  <input
-                    type="text"
-                    value={bankForm.iban}
-                    onChange={(e) => setBankForm({ ...bankForm, iban: e.target.value })}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">SWIFT Code</label>
-                  <input
-                    type="text"
-                    value={bankForm.swiftCode}
-                    onChange={(e) => setBankForm({ ...bankForm, swiftCode: e.target.value })}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -584,7 +599,7 @@ export default function BankManagement() {
                     <option value="">Select Bank</option>
                     {banks.filter(bank => bank.isActive).map((bank) => (
                       <option key={bank.id} value={bank.id}>
-                        {bank.name} - {bank.accountNumber}
+                        {bank.name} - {bank.cliqDetails.value}
                       </option>
                     ))}
                   </select>

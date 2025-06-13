@@ -75,10 +75,11 @@ export interface Order {
 export interface PlatformBank {
   id: string;
   name: string;
-  accountNumber: string;
+  cliqDetails: {
+    type: 'alias' | 'mobile';
+    value: string; // Either alias name or mobile number
+  };
   accountHolder: string;
-  iban?: string;
-  swiftCode?: string;
   balance: number;
   isActive: boolean;
   description?: string;
