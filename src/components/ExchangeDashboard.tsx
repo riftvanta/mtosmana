@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { User } from '@/types';
+import { User, CommissionRate } from '@/types';
 
 export default function ExchangeDashboard() {
   const { user } = useAuth();
@@ -27,6 +27,30 @@ export default function ExchangeDashboard() {
         if (!querySnapshot.empty) {
           const doc = querySnapshot.docs[0];
           const data = doc.data();
+          
+          // Handle backward compatibility for commission rates
+          let commissionRates: { incoming: CommissionRate; outgoing: CommissionRate };
+          
+          if (data.commissionRates) {
+            // Check if it's the old format (numbers) or new format (objects)
+            if (typeof data.commissionRates.incoming === 'number') {
+              // Old format - convert to new format
+              commissionRates = {
+                incoming: { type: 'fixed', value: data.commissionRates.incoming },
+                outgoing: { type: 'fixed', value: data.commissionRates.outgoing }
+              };
+            } else {
+              // New format
+              commissionRates = data.commissionRates;
+            }
+          } else {
+            // Default values
+            commissionRates = {
+              incoming: { type: 'fixed', value: 0 },
+              outgoing: { type: 'fixed', value: 0 }
+            };
+          }
+          
           setUserData({
             id: doc.id,
             username: data.username,
@@ -35,7 +59,7 @@ export default function ExchangeDashboard() {
             exchangeName: data.exchangeName,
             contactInfo: data.contactInfo,
             balance: data.balance || 0,
-            commissionRates: data.commissionRates || { incoming: 0, outgoing: 0 },
+            commissionRates,
             assignedBanks: data.assignedBanks || [],
             status: data.status || 'active',
             createdAt: data.createdAt?.toDate() || new Date(),
@@ -52,18 +76,20 @@ export default function ExchangeDashboard() {
     fetchUserData();
   }, [user]);
 
-  // Placeholder statistics
+
+
+  // Placeholder statistics (excluding balance)
   const stats = [
     { name: 'My Orders', value: '0', icon: '📋', color: 'bg-blue-500' },
     { name: 'Pending', value: '0', icon: '⏳', color: 'bg-yellow-500' },
     { name: 'Completed', value: '0', icon: '✅', color: 'bg-green-500' },
-    { 
-      name: 'Current Balance', 
-      value: userData ? `JOD ${userData.balance.toLocaleString()}` : 'JOD 0', 
-      icon: '💰', 
-      color: 'bg-purple-500' 
-    },
   ];
+
+  // Balance data for custom card
+  const balanceData = {
+    amount: userData ? userData.balance : 0,
+    formatted: userData ? userData.balance.toLocaleString() : '0'
+  };
 
   if (loading) {
     return (
@@ -91,7 +117,7 @@ export default function ExchangeDashboard() {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => (
           <div key={stat.name} className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
@@ -105,6 +131,25 @@ export default function ExchangeDashboard() {
             </div>
           </div>
         ))}
+        
+        {/* Custom Balance Card - More elegant for mobile */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-purple-500 text-white text-xl">
+              💰
+            </div>
+            <div className="ml-4 flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-600 whitespace-nowrap">
+                Balance
+              </p>
+              <div className="flex items-baseline">
+                <span className="text-2xl font-bold text-gray-900">
+                  {balanceData.formatted}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Quick Actions */}
@@ -129,49 +174,7 @@ export default function ExchangeDashboard() {
         </div>
       </div>
 
-      {/* Account Information */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Account Information</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Exchange Name</h3>
-            <p className="text-lg text-gray-900">{userData?.exchangeName || user?.exchangeName || 'Not set'}</p>
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Username</h3>
-            <p className="text-lg text-gray-900">{user?.username}</p>
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Commission Rates</h3>
-            <div className="space-y-1">
-              <p className="text-sm text-gray-600">
-                Incoming: {userData?.commissionRates?.incoming ? `JOD ${userData.commissionRates.incoming}` : 'Not configured'}
-              </p>
-              <p className="text-sm text-gray-600">
-                Outgoing: {userData?.commissionRates?.outgoing ? `JOD ${userData.commissionRates.outgoing}` : 'Not configured'}
-              </p>
-            </div>
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Assigned Banks</h3>
-            <p className="text-sm text-gray-600">
-              {userData?.assignedBanks?.length ? `${userData.assignedBanks.length} banks assigned` : 'No banks assigned yet'}
-            </p>
-          </div>
-          {userData?.contactInfo && (
-            <>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Contact Email</h3>
-                <p className="text-sm text-gray-900">{userData.contactInfo.email || 'Not provided'}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Phone Number</h3>
-                <p className="text-sm text-gray-900">{userData.contactInfo.phone || 'Not provided'}</p>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+
 
       {/* Recent Orders Placeholder */}
       <div className="bg-white rounded-lg shadow p-6">

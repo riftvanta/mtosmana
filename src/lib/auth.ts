@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, Timestamp } from 'firebase/firestore';
-import { User, LoginCredentials, AuthUser } from '@/types';
+import { User, LoginCredentials, AuthUser, CommissionRate } from '@/types';
 
 // Password utilities
 export const hashPassword = async (password: string): Promise<string> => {
@@ -75,6 +75,29 @@ export const findUserByUsername = async (username: string): Promise<User | null>
     const doc = querySnapshot.docs[0];
     const userData = doc.data();
     
+    // Handle backward compatibility for commission rates
+    let commissionRates: { incoming: CommissionRate; outgoing: CommissionRate };
+    
+    if (userData.commissionRates) {
+      // Check if it's the old format (numbers) or new format (objects)
+      if (typeof userData.commissionRates.incoming === 'number') {
+        // Old format - convert to new format
+        commissionRates = {
+          incoming: { type: 'fixed', value: userData.commissionRates.incoming },
+          outgoing: { type: 'fixed', value: userData.commissionRates.outgoing }
+        };
+      } else {
+        // New format
+        commissionRates = userData.commissionRates;
+      }
+    } else {
+      // Default values
+      commissionRates = {
+        incoming: { type: 'fixed', value: 0 },
+        outgoing: { type: 'fixed', value: 0 }
+      };
+    }
+    
     return {
       id: doc.id,
       username: userData.username,
@@ -83,7 +106,7 @@ export const findUserByUsername = async (username: string): Promise<User | null>
       exchangeName: userData.exchangeName,
       contactInfo: userData.contactInfo,
       balance: userData.balance || 0,
-      commissionRates: userData.commissionRates || { incoming: 0, outgoing: 0 },
+      commissionRates,
       assignedBanks: userData.assignedBanks || [],
       status: userData.status || 'active',
       createdAt: userData.createdAt?.toDate() || new Date(),
@@ -118,7 +141,10 @@ export const createDefaultAdmin = async (): Promise<boolean> => {
       password: hashedPassword,
       role: 'admin' as const,
       balance: 0,
-      commissionRates: { incoming: 0, outgoing: 0 },
+      commissionRates: { 
+        incoming: { type: 'fixed', value: 0 }, 
+        outgoing: { type: 'fixed', value: 0 } 
+      },
       assignedBanks: [],
       status: 'active' as const,
       createdAt: Timestamp.now(),
@@ -184,7 +210,10 @@ export const createExchangeUser = async (userData: {
   password: string;
   exchangeName: string;
   balance?: number;
-  commissionRates?: { incoming: number; outgoing: number };
+  commissionRates?: { 
+    incoming: { type: 'fixed' | 'percentage'; value: number }; 
+    outgoing: { type: 'fixed' | 'percentage'; value: number }; 
+  };
 }): Promise<boolean> => {
   try {
     // Check if Firebase is accessible
@@ -213,7 +242,10 @@ export const createExchangeUser = async (userData: {
       role: 'exchange' as const,
       exchangeName: userData.exchangeName,
       balance: userData.balance || 0,
-      commissionRates: userData.commissionRates || { incoming: 0, outgoing: 0 },
+      commissionRates: userData.commissionRates || { 
+        incoming: { type: 'fixed', value: 0 }, 
+        outgoing: { type: 'fixed', value: 0 } 
+      },
       assignedBanks: [],
       status: 'active' as const,
       createdAt: Timestamp.now(),

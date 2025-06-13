@@ -12,6 +12,7 @@
     "@types/bcryptjs": "^3.0.0",
     "bcryptjs": "^3.0.2",
     "firebase": "^11.9.1",
+    "framer-motion": "^12.18.1",
     "next": "15.3.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

@@ -1,6 +1,14 @@
 // User Types
 export type UserRole = 'admin' | 'exchange';
 
+// Commission Types
+export type CommissionType = 'fixed' | 'percentage';
+
+export interface CommissionRate {
+  type: CommissionType;
+  value: number;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -14,8 +22,8 @@ export interface User {
   };
   balance: number;
   commissionRates: {
-    incoming: number; // fixed amount or percentage
-    outgoing: number; // fixed amount or percentage
+    incoming: CommissionRate; // can be fixed JOD or percentage
+    outgoing: CommissionRate; // can be fixed JOD or percentage
   };
   assignedBanks: string[]; // array of bank IDs
   status: 'active' | 'inactive';

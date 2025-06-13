@@ -18,11 +18,13 @@ export default function CreateExchangeUser({ onUserCreated, onClose }: CreateExc
     balance: 0,
     commissionIncoming: 0,
     commissionOutgoing: 0,
+    commissionIncomingType: 'fixed' as 'fixed' | 'percentage',
+    commissionOutgoingType: 'fixed' as 'fixed' | 'percentage',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -50,8 +52,14 @@ export default function CreateExchangeUser({ onUserCreated, onClose }: CreateExc
         exchangeName: formData.exchangeName,
         balance: formData.balance,
         commissionRates: {
-          incoming: formData.commissionIncoming,
-          outgoing: formData.commissionOutgoing,
+          incoming: {
+            value: formData.commissionIncoming,
+            type: formData.commissionIncomingType
+          },
+          outgoing: {
+            value: formData.commissionOutgoing,
+            type: formData.commissionOutgoingType
+          }
         }
       };
 
@@ -66,6 +74,8 @@ export default function CreateExchangeUser({ onUserCreated, onClose }: CreateExc
           balance: 0,
           commissionIncoming: 0,
           commissionOutgoing: 0,
+          commissionIncomingType: 'fixed',
+          commissionOutgoingType: 'fixed',
         });
         onUserCreated?.();
         
@@ -107,7 +117,7 @@ export default function CreateExchangeUser({ onUserCreated, onClose }: CreateExc
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+      <div className="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
         <div className="mt-3">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900">Create New Exchange User</h3>
@@ -184,37 +194,82 @@ export default function CreateExchangeUser({ onUserCreated, onClose }: CreateExc
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* Commission Rates Section */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium text-gray-900 border-t pt-4">Commission Rates</h4>
+              
+              {/* Incoming Commission */}
               <div>
-                <label htmlFor="commissionIncoming" className="block text-sm font-medium text-gray-700">
-                  Incoming Commission (JOD)
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Incoming Commission
                 </label>
-                <input
-                  type="number"
-                  name="commissionIncoming"
-                  id="commissionIncoming"
-                  step="0.01"
-                  value={formData.commissionIncoming}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="2.50"
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <select
+                      name="commissionIncomingType"
+                      value={formData.commissionIncomingType}
+                      onChange={handleInputChange}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    >
+                      <option value="fixed">Fixed JOD</option>
+                      <option value="percentage">Percentage</option>
+                    </select>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      name="commissionIncoming"
+                      step="0.01"
+                      value={formData.commissionIncoming}
+                      onChange={handleInputChange}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder={formData.commissionIncomingType === 'fixed' ? "2.50" : "1.5"}
+                    />
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  {formData.commissionIncomingType === 'fixed' 
+                    ? 'Fixed commission per transaction in JOD' 
+                    : 'Percentage of transaction amount'
+                  }
+                </p>
               </div>
 
+              {/* Outgoing Commission */}
               <div>
-                <label htmlFor="commissionOutgoing" className="block text-sm font-medium text-gray-700">
-                  Outgoing Commission (JOD)
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Outgoing Commission
                 </label>
-                <input
-                  type="number"
-                  name="commissionOutgoing"
-                  id="commissionOutgoing"
-                  step="0.01"
-                  value={formData.commissionOutgoing}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="1.50"
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <select
+                      name="commissionOutgoingType"
+                      value={formData.commissionOutgoingType}
+                      onChange={handleInputChange}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    >
+                      <option value="fixed">Fixed JOD</option>
+                      <option value="percentage">Percentage</option>
+                    </select>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      name="commissionOutgoing"
+                      step="0.01"
+                      value={formData.commissionOutgoing}
+                      onChange={handleInputChange}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder={formData.commissionOutgoingType === 'fixed' ? "1.50" : "1.0"}
+                    />
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  {formData.commissionOutgoingType === 'fixed' 
+                    ? 'Fixed commission per transaction in JOD' 
+                    : 'Percentage of transaction amount'
+                  }
+                </p>
               </div>
             </div>
 
