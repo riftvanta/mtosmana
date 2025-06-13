@@ -5,9 +5,10 @@ import { createExchangeUser } from '@/lib/auth';
 
 interface CreateExchangeUserProps {
   onUserCreated?: () => void;
+  onClose?: () => void;
 }
 
-export default function CreateExchangeUser({ onUserCreated }: CreateExchangeUserProps) {
+export default function CreateExchangeUser({ onUserCreated, onClose }: CreateExchangeUserProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -29,6 +30,11 @@ export default function CreateExchangeUser({ onUserCreated }: CreateExchangeUser
     }));
     setError('');
     setSuccess('');
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    onClose?.();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -65,7 +71,7 @@ export default function CreateExchangeUser({ onUserCreated }: CreateExchangeUser
         
         // Auto close after 3 seconds
         setTimeout(() => {
-          setIsOpen(false);
+          handleClose();
           setSuccess('');
         }, 3000);
       } else {
@@ -79,7 +85,10 @@ export default function CreateExchangeUser({ onUserCreated }: CreateExchangeUser
     }
   };
 
-  if (!isOpen) {
+  // If onClose is provided, it means this is controlled externally
+  const isControlled = onClose !== undefined;
+
+  if (!isControlled && !isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
@@ -91,6 +100,11 @@ export default function CreateExchangeUser({ onUserCreated }: CreateExchangeUser
     );
   }
 
+  // Don't render modal if internally controlled and not open
+  if (!isControlled && !isOpen) {
+    return null;
+  }
+
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
@@ -98,7 +112,7 @@ export default function CreateExchangeUser({ onUserCreated }: CreateExchangeUser
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900">Create New Exchange User</h3>
             <button
-              onClick={() => setIsOpen(false)}
+              onClick={handleClose}
               className="text-gray-400 hover:text-gray-600"
             >
               ✕
@@ -219,7 +233,7 @@ export default function CreateExchangeUser({ onUserCreated }: CreateExchangeUser
             <div className="flex justify-end space-x-3 pt-4">
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={handleClose}
                 className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Cancel
