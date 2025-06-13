@@ -72,6 +72,31 @@ export interface Order {
 }
 
 // Bank Types
+export interface PlatformBank {
+  id: string;
+  name: string;
+  accountNumber: string;
+  accountHolder: string;
+  iban?: string;
+  swiftCode?: string;
+  balance: number;
+  isActive: boolean;
+  description?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface BankAssignment {
+  id: string;
+  exchangeId: string; // reference to exchange user
+  bankId: string; // reference to platform bank
+  assignmentType: 'private' | 'public'; // private = only this exchange, public = shared
+  isActive: boolean;
+  assignedAt: Date;
+  assignedBy: string; // admin user ID
+}
+
+// Legacy Bank interface for backward compatibility
 export interface Bank {
   id: string;
   name: string;

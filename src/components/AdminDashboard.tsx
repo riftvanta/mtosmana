@@ -2,9 +2,11 @@
 
 import React, { useState } from 'react';
 import CreateExchangeUser from './CreateExchangeUser';
+import BankManagement from './BankManagement';
 
 export default function AdminDashboard() {
   const [showCreateExchange, setShowCreateExchange] = useState(false);
+  const [showBankManagement, setShowBankManagement] = useState(false);
 
   // Placeholder statistics
   const stats = [
@@ -58,7 +60,10 @@ export default function AdminDashboard() {
             </div>
           </button>
           
-          <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors">
+          <button 
+            onClick={() => setShowBankManagement(true)}
+            className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors"
+          >
             <div className="text-center">
               <div className="text-2xl mb-2">🏦</div>
               <div className="text-sm font-medium text-gray-700">Manage Banks</div>
@@ -116,6 +121,24 @@ export default function AdminDashboard() {
           }}
           onClose={() => setShowCreateExchange(false)}
         />
+      )}
+
+      {/* Bank Management Modal */}
+      {showBankManagement && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-4 mx-auto p-5 border w-full max-w-7xl shadow-lg rounded-md bg-white">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Bank Management System</h3>
+              <button
+                onClick={() => setShowBankManagement(false)}
+                className="text-gray-400 hover:text-gray-600 text-xl"
+              >
+                ✕
+              </button>
+            </div>
+            <BankManagement />
+          </div>
+        </div>
       )}
     </div>
   );
