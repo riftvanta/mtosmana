@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import OrderManagement from '@/components/OrderManagement';
@@ -13,21 +13,9 @@ export default function OrdersPage() {
   const router = useRouter();
   const [userCommissionRate, setUserCommissionRate] = useState<CommissionRate | null>(null);
   const [assignedBanks, setAssignedBanks] = useState<(BankAssignment & { bank: PlatformBank })[]>([]);
-  const [platformBanks, setPlatformBanks] = useState<PlatformBank[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-      return;
-    }
-
-    if (user) {
-      loadUserData();
-    }
-  }, [user, loading, router]);
-
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -52,14 +40,24 @@ export default function OrdersPage() {
         }
       }
 
-      // Load platform banks
-      await loadPlatformBanks();
+
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
       setDataLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+      return;
+    }
+
+    if (user) {
+      loadUserData();
+    }
+  }, [user, loading, router, loadUserData]);
 
   const loadAssignedBanks = async (exchangeId: string) => {
     try {
@@ -91,21 +89,7 @@ export default function OrdersPage() {
     }
   };
 
-  const loadPlatformBanks = async () => {
-    try {
-      const banksQuery = query(collection(db, 'platformBanks'), where('isActive', '==', true));
-      const banksSnapshot = await getDocs(banksQuery);
-      
-      const banks = banksSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as PlatformBank[];
-      
-      setPlatformBanks(banks);
-    } catch (error) {
-      console.error('Error loading platform banks:', error);
-    }
-  };
+
 
   if (loading || dataLoading) {
     return (
@@ -129,7 +113,6 @@ export default function OrdersPage() {
           userRole={user.role}
           userCommissionRate={userCommissionRate || undefined}
           assignedBanks={assignedBanks}
-          platformBanks={platformBanks}
         />
       </div>
     </div>

@@ -6,7 +6,6 @@ import {
   OrderType, 
   OrderPriority, 
   CommissionRate, 
-  User,
   FormErrors,
   BankAssignment,
   PlatformBank,
@@ -17,11 +16,9 @@ import {
   calculateCommission, 
   calculateNetAmount,
   createOrder,
-  addOrderFile,
   updateOrder
 } from '@/lib/orderOperations';
 import { useAuth } from '@/contexts/AuthContext';
-import { uploadFile } from '@/lib/firebase-storage';
 
 interface IncomingTransferFormProps {
   onOrderCreated: (orderId: string) => void;
@@ -151,7 +148,7 @@ const IncomingTransferForm: React.FC<IncomingTransferFormProps> = ({
     return Object.keys(newErrors).length === 0;
   }, [formData, files]);
 
-  const handleFileSelect = useCallback((selectedFiles: FileList | null, source: 'gallery' | 'camera') => {
+  const handleFileSelect = useCallback((selectedFiles: FileList | null) => {
     if (!selectedFiles || selectedFiles.length === 0) return;
 
     const newFiles: FileUpload[] = [];
@@ -196,24 +193,18 @@ const IncomingTransferForm: React.FC<IncomingTransferFormProps> = ({
         f.id === fileUpload.id ? { ...f, status: 'uploading' } : f
       ));
 
-      // Upload to Firebase Storage
-      const downloadURL = await uploadFile(fileUpload.file, `orders/screenshots/${user.id}`, {
-        onProgress: (progress) => {
-          setFiles(prev => prev.map(f => 
-            f.id === fileUpload.id ? { ...f, progress } : f
-          ));
-        }
-      });
-
-      // Update status to completed
-      setFiles(prev => prev.map(f => 
-        f.id === fileUpload.id ? { 
-          ...f, 
-          status: 'completed', 
-          url: downloadURL,
-          progress: 100
-        } : f
-      ));
+      // TODO: Implement Firebase Storage upload
+      // For now, simulate upload completion
+      setTimeout(() => {
+        setFiles(prev => prev.map(f => 
+          f.id === fileUpload.id ? { 
+            ...f, 
+            status: 'completed', 
+            url: 'placeholder-url',
+            progress: 100
+          } : f
+        ));
+      }, 1000);
 
     } catch (error) {
       console.error('Error uploading file:', error);
@@ -502,7 +493,7 @@ const IncomingTransferForm: React.FC<IncomingTransferFormProps> = ({
             accept="image/*"
             capture="environment"
             multiple
-            onChange={(e) => handleFileSelect(e.target.files, 'camera')}
+            onChange={(e) => handleFileSelect(e.target.files)}
             className="hidden"
           />
           <input
@@ -510,7 +501,7 @@ const IncomingTransferForm: React.FC<IncomingTransferFormProps> = ({
             type="file"
             accept="image/*"
             multiple
-            onChange={(e) => handleFileSelect(e.target.files, 'gallery')}
+            onChange={(e) => handleFileSelect(e.target.files)}
             className="hidden"
           />
 

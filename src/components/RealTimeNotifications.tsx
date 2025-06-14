@@ -4,9 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Notification,
   NotificationType,
-  ConnectionStatus,
-  Order,
-  User
+  ConnectionStatus
 } from '@/types';
 import {
   collection,
@@ -17,8 +15,7 @@ import {
   onSnapshot,
   updateDoc,
   doc,
-  serverTimestamp,
-  Timestamp
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -65,6 +62,65 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
       audioRef.current.volume = 0.5;
     }
   }, [enableSounds]);
+
+  const playNotificationSound = useCallback(() => {
+    if (enableSounds && audioRef.current) {
+      audioRef.current.play().catch(error => {
+        console.log('Could not play notification sound:', error);
+      });
+    }
+  }, [enableSounds]);
+
+  const showToastNotification = useCallback((notification: Notification) => {
+    const toastId = `toast-${notification.id}-${Date.now()}`;
+    const toast: ToastNotification = {
+      ...notification,
+      id: toastId,
+      isVisible: true
+    };
+
+    setToastNotifications(prev => {
+      const newToasts = [toast, ...prev].slice(0, maxVisible);
+      return newToasts;
+    });
+
+    // Auto-hide toast after 5 seconds
+    const timeoutId = setTimeout(() => {
+      setToastNotifications(prev => {
+        const toast = prev.find(t => t.id === toastId);
+        if (toast?.timeoutId) {
+          clearTimeout(toast.timeoutId);
+        }
+        return prev.map(t => 
+          t.id === toastId ? { ...t, isVisible: false } : t
+        );
+      });
+
+      // Remove from array after animation
+      setTimeout(() => {
+        setToastNotifications(prev => prev.filter(t => t.id !== toastId));
+      }, 300);
+    }, 5000);
+
+    toast.timeoutId = timeoutId;
+  }, [maxVisible]);
+
+  const hideToastNotification = useCallback((toastId: string) => {
+    setToastNotifications(prev => {
+      const toast = prev.find(t => t.id === toastId);
+      if (toast?.timeoutId) {
+        clearTimeout(toast.timeoutId);
+      }
+      return prev.map(t => 
+        t.id === toastId ? { ...t, isVisible: false } : t
+      );
+    });
+
+    // Remove from array after animation
+    setTimeout(() => {
+      setToastNotifications(prev => prev.filter(t => t.id !== toastId));
+    }, 300);
+  }, []);
 
   // Set up real-time notification listener
   useEffect(() => {
@@ -133,7 +189,7 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
         unsubscribeRef.current();
       }
     };
-  }, [user]);
+  }, [user, playNotificationSound, showToastNotification]);
 
   // Connection monitoring
   useEffect(() => {
@@ -163,51 +219,7 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
     };
   }, []);
 
-  const playNotificationSound = useCallback(() => {
-    if (enableSounds && audioRef.current) {
-      audioRef.current.play().catch(error => {
-        console.log('Could not play notification sound:', error);
-      });
-    }
-  }, [enableSounds]);
 
-  const showToastNotification = useCallback((notification: Notification) => {
-    const toastId = `toast-${notification.id}-${Date.now()}`;
-    const toast: ToastNotification = {
-      ...notification,
-      id: toastId,
-      isVisible: true
-    };
-
-    setToastNotifications(prev => {
-      const newToasts = [toast, ...prev].slice(0, maxVisible);
-      return newToasts;
-    });
-
-    // Auto-hide toast after 5 seconds
-    const timeoutId = setTimeout(() => {
-      hideToastNotification(toastId);
-    }, 5000);
-
-    toast.timeoutId = timeoutId;
-  }, [maxVisible]);
-
-  const hideToastNotification = useCallback((toastId: string) => {
-    setToastNotifications(prev => {
-      const toast = prev.find(t => t.id === toastId);
-      if (toast?.timeoutId) {
-        clearTimeout(toast.timeoutId);
-      }
-      return prev.map(t => 
-        t.id === toastId ? { ...t, isVisible: false } : t
-      );
-    });
-
-    // Remove from array after animation
-    setTimeout(() => {
-      setToastNotifications(prev => prev.filter(t => t.id !== toastId));
-    }, 300);
-  }, []);
 
   const markAsRead = async (notificationId: string) => {
     try {

@@ -57,6 +57,8 @@ export const monitorConnection = () => {
   });
 };
 
+
+
 // Platform Banks Operations
 export const createPlatformBank = async (bankData: Omit<PlatformBank, 'id' | 'createdAt' | 'updatedAt'>) => {
   try {
@@ -90,6 +92,7 @@ export const getAllPlatformBanks = async () => {
         balance: data.balance || 0,
         isActive: data.isActive,
         description: data.description,
+        priority: data.priority || 1,
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date()
       });
@@ -119,6 +122,7 @@ export const getActivePlatformBanks = async () => {
         balance: data.balance || 0,
         isActive: data.isActive,
         description: data.description,
+        priority: data.priority || 1,
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date()
       });
@@ -251,6 +255,7 @@ export const getExchangeAssignedBanks = async (exchangeId: string) => {
           balance: data.balance || 0,
           isActive: data.isActive,
           description: data.description,
+          priority: data.priority || 1,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date()
         });
@@ -303,6 +308,7 @@ export const getAllBankAssignments = async () => {
         bankId: data.bankId,
         assignmentType: data.assignmentType,
         isActive: data.isActive,
+        priority: data.priority || 1,
         assignedAt: data.assignedAt?.toDate() || new Date(),
         assignedBy: data.assignedBy
       });
@@ -332,6 +338,7 @@ export const subscribeToPlatformBanks = (callback: (banks: PlatformBank[]) => vo
         balance: data.balance || 0,
         isActive: data.isActive,
         description: data.description,
+        priority: data.priority || 1,
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date()
       });
@@ -366,6 +373,7 @@ export const getBanksByIds = async (bankIds: string[]): Promise<PlatformBank[]> 
           balance: data.balance || 0,
           isActive: data.isActive,
           description: data.description,
+          priority: data.priority || 1,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date()
         });
@@ -411,6 +419,7 @@ export const getActivePlatformBanksWithAssignments = async () => {
         balance: data.balance || 0,
         isActive: data.isActive,
         description: data.description,
+        priority: data.priority || 1,
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date()
       });

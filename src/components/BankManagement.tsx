@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PlatformBank, BankAssignment, User } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -94,18 +94,7 @@ export default function BankManagement() {
     assignmentType: 'public' as 'private' | 'public'
   });
 
-  useEffect(() => {
-    loadData();
-    
-    // Set up real-time listener for banks
-    const unsubscribe = subscribeToPlatformBanks((updatedBanks) => {
-      setBanks(updatedBanks);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const loadData = async () => {
+      const loadData = useCallback(async () => {
     setLoading(true);
     try {
       // Load platform banks
@@ -149,7 +138,18 @@ export default function BankManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadData();
+
+    // Set up real-time listener for banks
+    const unsubscribe = subscribeToPlatformBanks((updatedBanks) => {
+      setBanks(updatedBanks);
+    });
+
+    return () => unsubscribe();
+  }, [loadData]);
 
   const handleAddBank = async () => {
     if (!bankForm.name || !bankForm.cliqValue || !bankForm.accountHolder) {
@@ -167,7 +167,8 @@ export default function BankManagement() {
       accountHolder: bankForm.accountHolder,
       balance: bankForm.balance,
       description: bankForm.description,
-      isActive: bankForm.isActive
+      isActive: bankForm.isActive,
+      priority: 1
     };
     
     const result = await createPlatformBank(bankData);
@@ -195,7 +196,8 @@ export default function BankManagement() {
       accountHolder: bankForm.accountHolder,
       balance: bankForm.balance,
       description: bankForm.description,
-      isActive: bankForm.isActive
+      isActive: bankForm.isActive,
+      priority: 1
     };
     
     const result = await updatePlatformBank(editingBank.id, bankData);

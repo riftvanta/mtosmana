@@ -37,7 +37,7 @@ const IndexBuildingNotice: React.FC<IndexBuildingNoticeProps> = ({ className = '
           </h3>
           <div className="mt-2 text-sm text-blue-700">
             <p>
-              We're optimizing the database indices to improve performance. This process typically takes 5-15 minutes.
+              We&apos;re optimizing the database indices to improve performance. This process typically takes 5-15 minutes.
             </p>
             <ul className="mt-2 list-disc pl-5 space-y-1">
               <li>You can still create new orders</li>

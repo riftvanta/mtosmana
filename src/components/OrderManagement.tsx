@@ -32,7 +32,6 @@ interface OrderManagementProps {
   userRole: 'admin' | 'exchange';
   userCommissionRate?: CommissionRate;
   assignedBanks?: (BankAssignment & { bank: PlatformBank })[];
-  platformBanks?: PlatformBank[];
 }
 
 type ViewMode = 'list' | 'create-outgoing' | 'create-incoming' | 'view-order' | 'edit-order';
@@ -40,8 +39,7 @@ type ViewMode = 'list' | 'create-outgoing' | 'create-incoming' | 'view-order' | 
 const OrderManagement: React.FC<OrderManagementProps> = ({
   userRole,
   userCommissionRate,
-  assignedBanks = [],
-  platformBanks = []
+  assignedBanks = []
 }) => {
   const { user } = useAuth();
   const router = useRouter();
@@ -209,6 +207,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
   }, []);
 
   const handleOrderCreated = useCallback((orderId: string) => {
+    console.log('Order created:', orderId);
     setViewMode('list');
     loadOrders();
     loadStatistics();

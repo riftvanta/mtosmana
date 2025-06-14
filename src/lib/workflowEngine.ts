@@ -2,17 +2,12 @@ import {
   Order,
   OrderStatus,
   OrderAction,
-  OrderWorkflowAction,
-  User,
   Notification,
-  NotificationType,
-  ActivityLog
+  NotificationType
 } from '@/types';
 import {
   updateOrderStatus,
-  createWorkflowAction,
   getOrder,
-  getNextAllowedStatuses,
   isValidStatusTransition
 } from './orderOperations';
 import {
@@ -23,10 +18,10 @@ import {
   onSnapshot,
   query,
   where,
-  orderBy,
-  serverTimestamp,
-  runTransaction,
-  Timestamp
+  getDocs,
+  getDoc,
+  deleteDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -420,7 +415,7 @@ export class WorkflowEngine {
       const dependencyChecks = await Promise.all(
         dependencyIds.map(async (depId) => {
           const taskRef = doc(db, 'workflowTasks', depId);
-          const taskSnap = await taskRef.get();
+          const taskSnap = await getDoc(taskRef);
           const taskData = taskSnap.data() as WorkflowTask | undefined;
           return taskData?.status === 'completed';
         })
@@ -804,7 +799,7 @@ export class WorkflowEngine {
 
       // Delete in batches to avoid hitting Firestore limits
       for (const docSnap of snapshot.docs) {
-        await docSnap.ref.delete();
+        await deleteDoc(docSnap.ref);
         deletedCount++;
       }
 
@@ -850,5 +845,4 @@ export function initializeWorkflowEngine(config: Partial<WorkflowConfig>): Workf
   return workflowEngineInstance;
 }
 
-// Export types and utilities
-export type { WorkflowConfig, WorkflowTask, WorkflowCondition, WorkflowEvent, WorkflowEventType }; 
+// Export types and utilities are already exported above 

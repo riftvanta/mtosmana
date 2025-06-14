@@ -2,15 +2,12 @@ import {
   Order, 
   OrderType, 
   OrderStatus, 
-  OrderPriority,
   OrderAction,
   OrderWorkflowAction,
   OrderFilters,
   OrderSortOptions,
   OrderStatistics,
-  User,
   CommissionRate,
-  OrderIdGenerator,
   PaginatedResponse,
   PaginationOptions,
   OrderFile
@@ -29,8 +26,6 @@ import {
   startAfter, 
   runTransaction,
   serverTimestamp,
-  DocumentReference,
-  Timestamp,
   writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -479,12 +474,12 @@ export async function getOrders(
   pagination: PaginationOptions = { page: 1, limit: 10 }
 ): Promise<PaginatedResponse<Order>> {
   try {
-    let q = collection(db, 'orders');
-    const constraints: any[] = [];
+    const q = collection(db, 'orders');
+    const constraints: ReturnType<typeof where | typeof orderBy | typeof limit | typeof startAfter>[] = [];
 
     // Prioritize single most important filter to avoid complex indices
     // Apply only ONE filter at a time to reduce index requirements
-    let primaryFilter: any = null;
+    let primaryFilter: ReturnType<typeof where> | null = null;
     
     if (filters.exchangeId?.length === 1) {
       primaryFilter = where('exchangeId', '==', filters.exchangeId[0]);
@@ -824,8 +819,7 @@ export async function bulkUpdateOrderStatus(
   orderIds: string[],
   newStatus: OrderStatus,
   performedBy: string,
-  notes?: string,
-  reason?: string
+  notes?: string
 ): Promise<{ success: string[], failed: string[] }> {
   const batch = writeBatch(db);
   const success: string[] = [];

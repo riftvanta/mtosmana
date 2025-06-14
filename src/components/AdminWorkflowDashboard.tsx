@@ -1,20 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Order,
   OrderStatus,
-  WorkflowTask,
-  WorkflowEvent,
-  User,
-  OrderStatistics,
   ConnectionStatus
 } from '@/types';
 import {
   getWorkflowEngine,
-  WorkflowEventType
+  WorkflowEventType,
+  WorkflowTask,
+  WorkflowEvent
 } from '@/lib/workflowEngine';
-import { getOrders, getOrderStatistics } from '@/lib/orderOperations';
+import { getOrders } from '@/lib/orderOperations';
 import {
   collection,
   query,
@@ -371,7 +369,7 @@ const AdminWorkflowDashboard: React.FC<AdminWorkflowDashboardProps> = ({
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveView(tab.id as any)}
+              onClick={() => setActiveView(tab.id as 'overview' | 'orders' | 'tasks' | 'events' | 'system')}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeView === tab.id
                   ? 'border-blue-500 text-blue-600'
@@ -719,7 +717,7 @@ const AdminWorkflowDashboard: React.FC<AdminWorkflowDashboardProps> = ({
 
             {/* Task Statistics */}
             <div className="bg-white p-6 rounded-lg shadow border">
-              <h4 className="font-medium text-gray-900 mb-4">Today's Tasks</h4>
+              <h4 className="font-medium text-gray-900 mb-4">Today&apos;s Tasks</h4>
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Completed</span>
