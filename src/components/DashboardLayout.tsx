@@ -41,13 +41,12 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
 
   return (
     <div className="h-screen flex bg-gray-100">
-      {/* Mobile sidebar overlay */}
+      {/* Mobile sidebar overlay (invisible click area to close) */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 flex z-40 md:hidden"
+          className="fixed inset-0 z-40 md:hidden"
           onClick={() => setSidebarOpen(false)}
         >
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-75"></div>
         </div>
       )}
 
