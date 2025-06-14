@@ -1,17 +1,25 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { AuthUser, LoginCredentials, AuthContextType } from '@/types';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { AuthUser, LoginCredentials } from '@/types';
 import { authenticateUser, createDefaultAdmin } from '@/lib/auth';
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Performance: Separate context for auth state to prevent unnecessary re-renders
+const AuthStateContext = createContext<{ user: AuthUser | null; loading: boolean } | undefined>(undefined);
+const AuthActionsContext = createContext<{ 
+  login: (credentials: LoginCredentials) => Promise<boolean>; 
+  logout: () => Promise<void> 
+} | undefined>(undefined);
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
+  const state = useContext(AuthStateContext);
+  const actions = useContext(AuthActionsContext);
+  
+  if (state === undefined || actions === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context;
+  
+  return { ...state, ...actions };
 };
 
 export const useRequireAuth = (redirectTo = '/login') => {
@@ -30,95 +38,163 @@ interface AuthProviderProps {
   children: React.ReactNode;
 }
 
+// Cache for user session validation
+let sessionCache: { user: AuthUser | null; timestamp: number } | null = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Initialize default admin user
-    const initializeApp = async () => {
-      try {
-        await createDefaultAdmin();
-      } catch (error) {
-        console.error('Error initializing app:', error);
-        // Continue with auth check even if admin creation fails
-      }
-    };
-
-    // Check for existing session
-    const checkAuth = async () => {
-      try {
-        const storedUser = localStorage.getItem('auth_user');
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          
-          // Validate the stored user by checking if it has required fields
-          if (parsedUser.id && parsedUser.username && parsedUser.role) {
-            setUser(parsedUser);
-          } else {
-            // Invalid stored user data, clear it
-            localStorage.removeItem('auth_user');
-          }
-        }
-      } catch (error) {
-        console.error('Error checking auth:', error);
-        localStorage.removeItem('auth_user');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Initialize app and check auth
-    const initialize = async () => {
-      await initializeApp();
-      await checkAuth();
-    };
-
-    initialize();
-  }, []);
-
-  const login = async (credentials: LoginCredentials): Promise<boolean> => {
+  // Optimized login function with better error handling
+  const login = useCallback(async (credentials: LoginCredentials): Promise<boolean> => {
     try {
-      setLoading(true);
-      const authUser = await authenticateUser(credentials);
-      
-      if (authUser) {
-        setUser(authUser);
-        localStorage.setItem('auth_user', JSON.stringify(authUser));
+      const user = await authenticateUser(credentials);
+      if (user) {
+        setUser(user);
+        
+        // Cache the session
+        sessionCache = {
+          user: user,
+          timestamp: Date.now()
+        };
+        
+        // Persist in localStorage
+        localStorage.setItem('auth_user', JSON.stringify(user));
         return true;
+      } else {
+        console.warn('Authentication failed');
+        return false;
       }
-      
-      return false;
     } catch (error) {
       console.error('Login error:', error);
-      // Clear any invalid stored user data on login error
-      localStorage.removeItem('auth_user');
-      setUser(null);
       return false;
-    } finally {
-      setLoading(false);
     }
-  };
+  }, []);
 
-  const logout = async (): Promise<void> => {
+  // Optimized logout function
+  const logout = useCallback(async (): Promise<void> => {
     try {
       setUser(null);
+      sessionCache = null;
       localStorage.removeItem('auth_user');
     } catch (error) {
       console.error('Logout error:', error);
     }
-  };
+  }, []);
 
-  const value: AuthContextType = {
+  // Optimized session validation
+  const validateSession = useCallback(async (userData: AuthUser): Promise<boolean> => {
+    // Check cache first
+    if (sessionCache && 
+        sessionCache.user?.id === userData.id && 
+        Date.now() - sessionCache.timestamp < CACHE_DURATION) {
+      return true;
+    }
+
+    // Validate required fields
+    if (!userData.id || !userData.username || !userData.role) {
+      return false;
+    }
+
+    // Update cache
+    sessionCache = {
+      user: userData,
+      timestamp: Date.now()
+    };
+
+    return true;
+  }, []);
+
+  // Optimized auth check with debouncing
+  const checkAuth = useCallback(async () => {
+    try {
+      const storedUser = localStorage.getItem('auth_user');
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        
+        // Validate session
+        const isValid = await validateSession(parsedUser);
+        if (isValid) {
+          setUser(parsedUser);
+        } else {
+          // Clear invalid session
+          localStorage.removeItem('auth_user');
+          sessionCache = null;
+        }
+      }
+    } catch (error) {
+      console.error('Error checking auth:', error);
+      localStorage.removeItem('auth_user');
+      sessionCache = null;
+    } finally {
+      setLoading(false);
+    }
+  }, [validateSession]);
+
+  // Initialize app with optimized async loading
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeApp = async () => {
+      try {
+        // Initialize default admin (non-blocking)
+        createDefaultAdmin().catch(console.warn);
+        
+        // Check authentication
+        if (mounted) {
+          await checkAuth();
+        }
+      } catch (error) {
+        console.error('Error initializing app:', error);
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeApp();
+
+    return () => {
+      mounted = false;
+    };
+  }, [checkAuth]);
+
+  // Memoized context values to prevent unnecessary re-renders
+  const authState = useMemo(() => ({
     user,
-    loading,
-    login,
-    logout,
-  };
+    loading
+  }), [user, loading]);
 
+  const authActions = useMemo(() => ({
+    login,
+    logout
+  }), [login, logout]);
+
+  // Performance: Split context providers to minimize re-renders
   return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+    <AuthStateContext.Provider value={authState}>
+      <AuthActionsContext.Provider value={authActions}>
+        {children}
+      </AuthActionsContext.Provider>
+    </AuthStateContext.Provider>
   );
+};
+
+// Performance hook for components that only need user state
+export const useAuthState = () => {
+  const context = useContext(AuthStateContext);
+  if (context === undefined) {
+    throw new Error('useAuthState must be used within an AuthProvider');
+  }
+  return context;
+};
+
+// Performance hook for components that only need auth actions
+export const useAuthActions = () => {
+  const context = useContext(AuthActionsContext);
+  if (context === undefined) {
+    throw new Error('useAuthActions must be used within an AuthProvider');
+  }
+  return context;
 }; 

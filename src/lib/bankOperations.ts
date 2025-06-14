@@ -11,10 +11,51 @@ import {
   orderBy,
   serverTimestamp,
   writeBatch,
-  onSnapshot
+  onSnapshot,
+  documentId,
+  enableNetwork,
+  disableNetwork
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { PlatformBank, BankAssignment } from '@/types';
+
+// Performance Cache Implementation
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const cache = new Map<string, { data: unknown; timestamp: number }>();
+
+// Cache utility functions
+const getCachedData = <T>(key: string): T | null => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.data as T;
+  }
+  return null;
+};
+
+const setCachedData = (key: string, data: unknown) => {
+  cache.set(key, { data, timestamp: Date.now() });
+};
+
+// Connection pooling and performance monitoring
+let networkEnabled = true;
+const connectionListeners = new Set<() => void>();
+
+export const monitorConnection = () => {
+  window.addEventListener('online', () => {
+    if (!networkEnabled) {
+      enableNetwork(db);
+      networkEnabled = true;
+      connectionListeners.forEach(listener => listener());
+    }
+  });
+
+  window.addEventListener('offline', () => {
+    if (networkEnabled) {
+      disableNetwork(db);
+      networkEnabled = false;
+    }
+  });
+};
 
 // Platform Banks Operations
 export const createPlatformBank = async (bankData: Omit<PlatformBank, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -299,6 +340,91 @@ export const subscribeToPlatformBanks = (callback: (banks: PlatformBank[]) => vo
   });
 };
 
+// OPTIMIZED: Batch query for multiple banks
+export const getBanksByIds = async (bankIds: string[]): Promise<PlatformBank[]> => {
+  if (bankIds.length === 0) return [];
+  
+  const cacheKey = `banks-${bankIds.sort().join(',')}`;
+  const cached = getCachedData<PlatformBank[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    // Use batch query instead of sequential queries
+    const banksRef = collection(db, 'platformBanks');
+    const q = query(banksRef, where(documentId(), 'in', bankIds));
+    const querySnapshot = await getDocs(q);
+    
+    const banks: PlatformBank[] = [];
+    querySnapshot.forEach((doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        banks.push({
+          id: doc.id,
+          name: data.name,
+          cliqDetails: data.cliqDetails || { type: 'alias', value: '' },
+          accountHolder: data.accountHolder,
+          balance: data.balance || 0,
+          isActive: data.isActive,
+          description: data.description,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date()
+        });
+      }
+    });
+    
+    setCachedData(cacheKey, banks);
+    return banks;
+  } catch (error) {
+    console.error('Error fetching banks by IDs:', error);
+    return [];
+  }
+};
+
+// OPTIMIZED: Combined query with proper indexing
+export const getActivePlatformBanksWithAssignments = async () => {
+  const cacheKey = 'active-banks-with-assignments';
+  const cached = getCachedData<{ banks: PlatformBank[]; assignments: BankAssignment[] }>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    // Use composite index: isActive + name
+    const banksRef = collection(db, 'platformBanks');
+    const q = query(
+      banksRef, 
+      where('isActive', '==', true), 
+      orderBy('name') // Requires composite index
+    );
+    const querySnapshot = await getDocs(q);
+    
+    const result = {
+      banks: [] as PlatformBank[],
+      assignments: [] as BankAssignment[]
+    };
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      result.banks.push({
+        id: doc.id,
+        name: data.name,
+        cliqDetails: data.cliqDetails || { type: 'alias', value: '' },
+        accountHolder: data.accountHolder,
+        balance: data.balance || 0,
+        isActive: data.isActive,
+        description: data.description,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date()
+      });
+    });
+    
+    setCachedData(cacheKey, result);
+    return result;
+  } catch (error) {
+    console.error('Error fetching active banks with assignments:', error);
+    return { banks: [], assignments: [] };
+  }
+};
+
+// OPTIMIZED: Real-time listener with efficient data handling
 export const subscribeToExchangeBanks = (exchangeId: string, callback: (banks: PlatformBank[]) => void) => {
   const assignmentsRef = collection(db, 'bankAssignments');
   const q = query(
@@ -318,27 +444,49 @@ export const subscribeToExchangeBanks = (exchangeId: string, callback: (banks: P
       return;
     }
     
-    // Get the actual bank details
-    const banks: PlatformBank[] = [];
-    for (const bankId of bankIds) {
+    // Use optimized batch query
+    const banks = await getBanksByIds(bankIds);
+    callback(banks.filter(bank => bank.isActive));
+  }, (error) => {
+    console.error('Error in banks subscription:', error);
+    callback([]);
+  });
+};
+
+// OPTIMIZED: Batch write operations
+export const bulkUpdateBankStatus = async (bankIds: string[], isActive: boolean) => {
+  try {
+    const batch = writeBatch(db);
+    
+    bankIds.forEach(bankId => {
       const bankRef = doc(db, 'platformBanks', bankId);
-      const bankDoc = await getDoc(bankRef);
-      if (bankDoc.exists() && bankDoc.data().isActive) {
-        const data = bankDoc.data();
-        banks.push({
-          id: bankDoc.id,
-          name: data.name,
-          cliqDetails: data.cliqDetails || { type: 'alias', value: '' },
-          accountHolder: data.accountHolder,
-          balance: data.balance || 0,
-          isActive: data.isActive,
-          description: data.description,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date()
-        });
+      batch.update(bankRef, {
+        isActive,
+        updatedAt: serverTimestamp()
+      });
+    });
+    
+    await batch.commit();
+    
+    // Clear relevant cache entries
+    cache.clear();
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error in bulk update:', error);
+    return { success: false, error: 'Failed to update banks' };
+  }
+};
+
+// Cache invalidation utility
+export const invalidateCache = (pattern?: string) => {
+  if (pattern) {
+    for (const key of cache.keys()) {
+      if (key.includes(pattern)) {
+        cache.delete(key);
       }
     }
-    
-    callback(banks);
-  });
+  } else {
+    cache.clear();
+  }
 }; 

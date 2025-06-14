@@ -2,55 +2,140 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // For development - allow all reads and writes
-    // TODO: Replace with proper security rules for production
-    match /{document=**} {
-      allow read, write: if true;
+    
+    // Helper functions for authentication and authorization
+    function isAuthenticated() {
+      return request.auth != null;
     }
     
-    // Production-ready rules (commented out for development)
-    // Uncomment and modify these rules when deploying to production
-    /*
-    // Users collection - only authenticated users can access their own data
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    function isExchange() {
+      return isAuthenticated() && getUserRole() == 'exchange';
+    }
+    
+    function isActiveUser() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+    }
+    
+    // Users collection - strict access control
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Users can read their own data
+      allow read: if isAuthenticated() && request.auth.uid == userId && isActiveUser();
+      
       // Admin can read all users
-      allow read: if request.auth != null && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow read: if isAdmin();
+      
+      // Users can update their own profile (limited fields)
+      allow update: if isAuthenticated() && 
+        request.auth.uid == userId && 
+        isActiveUser() &&
+        // Only allow updating specific fields
+        request.resource.data.keys().hasAll(['contactInfo', 'updatedAt']) &&
+        request.resource.data.keys().hasOnly(['contactInfo', 'updatedAt']);
+      
+      // Only admin can create, delete users or update sensitive fields
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin();
     }
     
-    // Orders collection
+    // Platform Banks collection - admin only
+    match /platformBanks/{bankId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Bank Assignments collection
+    match /bankAssignments/{assignmentId} {
+      // Exchanges can read their own assignments
+      allow read: if isAuthenticated() && 
+        resource.data.exchangeId == request.auth.uid && 
+        isActiveUser();
+      
+      // Admin can manage all assignments
+      allow read, write: if isAdmin();
+    }
+    
+    // Orders collection with comprehensive access control
     match /orders/{orderId} {
-      // Users can only see their own orders
-      allow read, write: if request.auth != null && 
-        resource.data.exchangeId == request.auth.uid;
-      // Admin can see all orders
-      allow read, write: if request.auth != null && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // Exchanges can read/write their own orders
+      allow read, write: if isAuthenticated() && 
+        resource.data.exchangeId == request.auth.uid && 
+        isActiveUser();
+      
+      // Exchanges can create orders for themselves
+      allow create: if isAuthenticated() && 
+        request.resource.data.exchangeId == request.auth.uid && 
+        isActiveUser() &&
+        // Validate required fields
+        request.resource.data.keys().hasAll(['type', 'submittedAmount', 'status']) &&
+        request.resource.data.status == 'submitted';
+      
+      // Admin can manage all orders
+      allow read, write: if isAdmin();
     }
     
-    // Banks collection - only admin can modify
-    match /banks/{bankId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    // Messages collection
+    // Messages collection for order communication
     match /messages/{messageId} {
-      // Users can only see messages for their own orders
-      allow read, write: if request.auth != null && 
-        (resource.data.senderId == request.auth.uid ||
+      // Users can read messages for their orders
+      allow read: if isAuthenticated() && (
+        // Exchange can read messages for their orders
+        (isExchange() && 
          exists(/databases/$(database)/documents/orders/$(resource.data.orderId)) &&
-         get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.exchangeId == request.auth.uid);
-      // Admin can see all messages
-      allow read, write: if request.auth != null && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+         get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.exchangeId == request.auth.uid) ||
+        // Admin can read all messages
+        isAdmin()
+      );
+      
+      // Users can create messages for their orders
+      allow create: if isAuthenticated() && (
+        // Exchange can send messages for their orders
+        (isExchange() && 
+         exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId)) &&
+         get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.exchangeId == request.auth.uid &&
+         request.resource.data.senderId == request.auth.uid) ||
+        // Admin can send messages for any order
+        (isAdmin() && request.resource.data.senderId == request.auth.uid)
+      );
+      
+      // No one can update or delete messages (audit trail)
+      allow update, delete: if false;
     }
-    */
+    
+    // File storage references (for screenshots)
+    match /files/{fileId} {
+      // Users can read files associated with their orders
+      allow read: if isAuthenticated() && (
+        // Exchange can access files for their orders
+        (isExchange() && resource.data.ownerId == request.auth.uid) ||
+        // Admin can access all files
+        isAdmin()
+      );
+      
+      // Users can create file references for their orders
+      allow create: if isAuthenticated() && 
+        request.resource.data.ownerId == request.auth.uid &&
+        isActiveUser();
+      
+      // Admin can manage all files
+      allow write: if isAdmin();
+    }
+    
+    // System collections (read-only for non-admins)
+    match /systemConfig/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Audit logs (admin only)
+    match /auditLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
   }
 } 

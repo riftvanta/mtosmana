@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { User, CommissionRate } from '@/types';
@@ -9,6 +9,118 @@ import CreateExchangeUser from './CreateExchangeUser';
 interface ExchangeWithId extends User {
   id: string;
 }
+
+// Memoized components for better performance
+const ExchangeCard = React.memo(({ 
+  exchange, 
+  onView, 
+  onEdit, 
+  onStatusUpdate,
+  getStatusColor,
+  getStatusIcon 
+}: {
+  exchange: ExchangeWithId;
+  onView: (exchange: ExchangeWithId) => void;
+  onEdit: (exchange: ExchangeWithId) => void;
+  onStatusUpdate: (id: string, status: string) => void;
+  getStatusColor: (status: string) => string;
+  getStatusIcon: (status: string) => string;
+}) => {
+  const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    onStatusUpdate(exchange.id, e.target.value);
+  }, [exchange.id, onStatusUpdate]);
+
+  const handleView = useCallback(() => onView(exchange), [exchange, onView]);
+  const handleEdit = useCallback(() => onEdit(exchange), [exchange, onEdit]);
+
+  return (
+    <div className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
+      <div className="p-6">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center">
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <span className="text-blue-600 font-medium">
+                {exchange.exchangeName?.charAt(0).toUpperCase() || exchange.username.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-lg font-medium text-gray-900">
+                {exchange.exchangeName || exchange.username}
+              </h3>
+              <p className="text-sm text-gray-500">@{exchange.username}</p>
+            </div>
+          </div>
+          
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(exchange.status)}`}>
+            <span className="mr-1">{getStatusIcon(exchange.status)}</span>
+            {exchange.status}
+          </span>
+        </div>
+
+        {/* Details */}
+        <div className="space-y-2 mb-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Balance:</span>
+            <span className="font-medium">{exchange.balance?.toLocaleString() || 0}</span>
+          </div>
+          
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Email:</span>
+            <span className="font-medium truncate ml-2">
+              {exchange.contactInfo?.email || 'Not provided'}
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Phone:</span>
+            <span className="font-medium">
+              {exchange.contactInfo?.phone || 'Not provided'}
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Created:</span>
+            <span className="font-medium">
+              {exchange.createdAt.toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleView}
+            className="flex-1 bg-blue-50 text-blue-600 px-3 py-2 rounded-md hover:bg-blue-100 transition-colors text-sm"
+          >
+            👁️ View
+          </button>
+          
+          <button
+            onClick={handleEdit}
+            className="flex-1 bg-gray-50 text-gray-600 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors text-sm"
+          >
+            ✏️ Edit
+          </button>
+          
+          <div className="relative">
+            <select
+              value={exchange.status}
+              onChange={handleStatusChange}
+              className="bg-green-50 text-green-600 px-3 py-2 rounded-md hover:bg-green-100 transition-colors text-sm border-none focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="active">✅ Active</option>
+              <option value="inactive">⏸️ Inactive</option>
+              <option value="suspended">🚫 Suspended</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+ExchangeCard.displayName = 'ExchangeCard';
 
 export default function ExchangesManagement() {
   const [exchanges, setExchanges] = useState<ExchangeWithId[]>([]);
@@ -20,11 +132,80 @@ export default function ExchangesManagement() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  useEffect(() => {
-    fetchExchanges();
+  // Memoized callbacks to prevent unnecessary re-renders
+  const handleView = useCallback((exchange: ExchangeWithId) => {
+    setSelectedExchange(exchange);
+    setShowDetailsModal(true);
   }, []);
 
-  const fetchExchanges = async () => {
+  const handleEdit = useCallback((exchange: ExchangeWithId) => {
+    setSelectedExchange(exchange);
+    setShowEditModal(true);
+  }, []);
+
+  const updateExchangeStatus = useCallback(async (exchangeId: string, newStatus: string) => {
+    try {
+      const exchangeRef = doc(db, 'users', exchangeId);
+      await updateDoc(exchangeRef, {
+        status: newStatus,
+        updatedAt: new Date()
+      });
+      
+      // Optimized state update using functional update
+      setExchanges(prev => prev.map(exchange => 
+        exchange.id === exchangeId 
+          ? { ...exchange, status: newStatus as 'active' | 'inactive' | 'suspended', updatedAt: new Date() }
+          : exchange
+      ));
+    } catch (error) {
+      console.error('Error updating exchange status:', error);
+    }
+  }, []);
+
+  // Memoized utility functions
+  const getStatusColor = useCallback((status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'inactive': return 'bg-gray-100 text-gray-800';
+      case 'suspended': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  }, []);
+
+  const getStatusIcon = useCallback((status: string) => {
+    switch (status) {
+      case 'active': return '✅';
+      case 'inactive': return '⏸️';
+      case 'suspended': return '🚫';
+      default: return '❓';
+    }
+  }, []);
+
+  // Memoized filtered exchanges - expensive computation
+  const filteredExchanges = useMemo(() => {
+    return exchanges.filter(exchange => {
+      const matchesSearch = 
+        exchange.exchangeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        exchange.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        exchange.contactInfo?.email?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = statusFilter === 'all' || exchange.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [exchanges, searchTerm, statusFilter]);
+
+  // Memoized statistics calculation
+  const stats = useMemo(() => ({
+    total: exchanges.length,
+    active: exchanges.filter(e => e.status === 'active').length,
+    inactive: exchanges.filter(e => e.status === 'inactive').length,
+    suspended: exchanges.filter(e => e.status === 'suspended').length,
+    totalBalance: exchanges.reduce((sum, e) => sum + (e.balance || 0), 0)
+  }), [exchanges]);
+
+  // Optimized fetch function with error boundary
+  const fetchExchanges = useCallback(async () => {
     try {
       setLoading(true);
       const usersRef = collection(db, 'users');
@@ -78,26 +259,11 @@ export default function ExchangesManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const updateExchangeStatus = async (exchangeId: string, newStatus: string) => {
-    try {
-      const exchangeRef = doc(db, 'users', exchangeId);
-      await updateDoc(exchangeRef, {
-        status: newStatus,
-        updatedAt: new Date()
-      });
-      
-      // Update local state
-      setExchanges(prev => prev.map(exchange => 
-        exchange.id === exchangeId 
-          ? { ...exchange, status: newStatus as 'active' | 'inactive' | 'suspended', updatedAt: new Date() }
-          : exchange
-      ));
-    } catch (error) {
-      console.error('Error updating exchange status:', error);
-    }
-  };
+  useEffect(() => {
+    fetchExchanges();
+  }, [fetchExchanges]);
 
   const deleteExchange = async (exchangeId: string) => {
     if (!confirm('Are you sure you want to delete this exchange? This action cannot be undone.')) {
@@ -110,43 +276,6 @@ export default function ExchangesManagement() {
     } catch (error) {
       console.error('Error deleting exchange:', error);
     }
-  };
-
-  const filteredExchanges = exchanges.filter(exchange => {
-    const matchesSearch = 
-      exchange.exchangeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      exchange.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      exchange.contactInfo?.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || exchange.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'inactive': return 'bg-gray-100 text-gray-800';
-      case 'suspended': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'active': return '✅';
-      case 'inactive': return '⏸️';
-      case 'suspended': return '🚫';
-      default: return '❓';
-    }
-  };
-
-  const stats = {
-    total: exchanges.length,
-    active: exchanges.filter(e => e.status === 'active').length,
-    inactive: exchanges.filter(e => e.status === 'inactive').length,
-    suspended: exchanges.filter(e => e.status === 'suspended').length,
-    totalBalance: exchanges.reduce((sum, e) => sum + (e.balance || 0), 0)
   };
 
   if (loading) {
@@ -256,95 +385,15 @@ export default function ExchangesManagement() {
       {/* Exchanges Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredExchanges.map((exchange) => (
-          <div key={exchange.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-600 font-medium">
-                      {exchange.exchangeName?.charAt(0).toUpperCase() || exchange.username.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-lg font-medium text-gray-900">
-                      {exchange.exchangeName || exchange.username}
-                    </h3>
-                    <p className="text-sm text-gray-500">@{exchange.username}</p>
-                  </div>
-                </div>
-                
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(exchange.status)}`}>
-                  <span className="mr-1">{getStatusIcon(exchange.status)}</span>
-                  {exchange.status}
-                </span>
-              </div>
-
-              {/* Details */}
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Balance:</span>
-                  <span className="font-medium">{exchange.balance?.toLocaleString() || 0}</span>
-                </div>
-                
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Email:</span>
-                  <span className="font-medium truncate ml-2">
-                    {exchange.contactInfo?.email || 'Not provided'}
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Phone:</span>
-                  <span className="font-medium">
-                    {exchange.contactInfo?.phone || 'Not provided'}
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Created:</span>
-                  <span className="font-medium">
-                    {exchange.createdAt.toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => {
-                    setSelectedExchange(exchange);
-                    setShowDetailsModal(true);
-                  }}
-                  className="flex-1 bg-blue-50 text-blue-600 px-3 py-2 rounded-md hover:bg-blue-100 transition-colors text-sm"
-                >
-                  👁️ View
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setSelectedExchange(exchange);
-                    setShowEditModal(true);
-                  }}
-                  className="flex-1 bg-gray-50 text-gray-600 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors text-sm"
-                >
-                  ✏️ Edit
-                </button>
-                
-                <div className="relative">
-                  <select
-                    value={exchange.status}
-                    onChange={(e) => updateExchangeStatus(exchange.id, e.target.value)}
-                    className="bg-green-50 text-green-600 px-3 py-2 rounded-md hover:bg-green-100 transition-colors text-sm border-none focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="active">✅ Active</option>
-                    <option value="inactive">⏸️ Inactive</option>
-                    <option value="suspended">🚫 Suspended</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ExchangeCard
+            key={exchange.id}
+            exchange={exchange}
+            onView={handleView}
+            onEdit={handleEdit}
+            onStatusUpdate={updateExchangeStatus}
+            getStatusColor={getStatusColor}
+            getStatusIcon={getStatusIcon}
+          />
         ))}
       </div>
 
