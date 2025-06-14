@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PlatformBank, BankAssignment, User } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -28,6 +28,53 @@ export default function BankManagement() {
   const [editingBank, setEditingBank] = useState<PlatformBank | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-dismiss message functions
+  const showSuccessMessage = (message: string, duration = 4000) => {
+    // Clear any existing success timeout
+    if (successTimeoutRef.current) {
+      clearTimeout(successTimeoutRef.current);
+    }
+    
+    setSuccess(message);
+    setError(''); // Clear any error message
+    
+    // Set new timeout to clear the message
+    successTimeoutRef.current = setTimeout(() => {
+      setSuccess('');
+      successTimeoutRef.current = null;
+    }, duration);
+  };
+
+  const showErrorMessage = (message: string, duration = 6000) => {
+    // Clear any existing error timeout
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current);
+    }
+    
+    setError(message);
+    setSuccess(''); // Clear any success message
+    
+    // Set new timeout to clear the message
+    errorTimeoutRef.current = setTimeout(() => {
+      setError('');
+      errorTimeoutRef.current = null;
+    }, duration);
+  };
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Form data for new/edit bank
   const [bankForm, setBankForm] = useState({
@@ -98,7 +145,7 @@ export default function BankManagement() {
       setExchanges(exchangesList);
     } catch (error) {
       console.error('Error loading data:', error);
-      setError('Failed to load data');
+      showErrorMessage('Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -106,7 +153,7 @@ export default function BankManagement() {
 
   const handleAddBank = async () => {
     if (!bankForm.name || !bankForm.cliqValue || !bankForm.accountHolder) {
-      setError('Please fill in all required fields');
+      showErrorMessage('Please fill in all required fields');
       return;
     }
 
@@ -126,11 +173,11 @@ export default function BankManagement() {
     const result = await createPlatformBank(bankData);
     
     if (result.success) {
-      setSuccess('Bank added successfully');
+      showSuccessMessage('Bank added successfully');
       setShowAddBank(false);
       resetBankForm();
     } else {
-      setError(result.error || 'Failed to add bank');
+      showErrorMessage(result.error || 'Failed to add bank');
     }
     setLoading(false);
   };
@@ -154,12 +201,12 @@ export default function BankManagement() {
     const result = await updatePlatformBank(editingBank.id, bankData);
     
     if (result.success) {
-      setSuccess('Bank updated successfully');
+      showSuccessMessage('Bank updated successfully');
       setEditingBank(null);
       setShowAddBank(false); // Close the modal automatically
       resetBankForm();
     } else {
-      setError(result.error || 'Failed to update bank');
+      showErrorMessage(result.error || 'Failed to update bank');
     }
     setLoading(false);
   };
@@ -171,16 +218,16 @@ export default function BankManagement() {
     const result = await deletePlatformBank(bankId);
     
     if (result.success) {
-      setSuccess('Bank deleted successfully');
+      showSuccessMessage('Bank deleted successfully');
     } else {
-      setError(result.error || 'Failed to delete bank');
+      showErrorMessage(result.error || 'Failed to delete bank');
     }
     setLoading(false);
   };
 
   const handleAssignBank = async () => {
     if (!assignmentForm.exchangeId || !assignmentForm.bankId) {
-      setError('Please select both exchange and bank');
+      showErrorMessage('Please select both exchange and bank');
       return;
     }
 
@@ -195,12 +242,12 @@ export default function BankManagement() {
     );
     
     if (result.success) {
-      setSuccess('Bank assigned successfully');
+      showSuccessMessage('Bank assigned successfully');
       setShowAssignBank(false);
       resetAssignmentForm();
       loadData(); // Reload assignments
     } else {
-      setError(result.error || 'Failed to assign bank');
+      showErrorMessage(result.error || 'Failed to assign bank');
     }
     setLoading(false);
   };
@@ -212,10 +259,10 @@ export default function BankManagement() {
     const result = await removeBankAssignment(exchangeId, bankId);
     
     if (result.success) {
-      setSuccess('Bank assignment removed');
+      showSuccessMessage('Bank assignment removed');
       loadData(); // Reload assignments
     } else {
-      setError(result.error || 'Failed to remove assignment');
+      showErrorMessage(result.error || 'Failed to remove assignment');
     }
     setLoading(false);
   };
@@ -307,16 +354,60 @@ export default function BankManagement() {
         </nav>
       </div>
 
-      {/* Messages */}
+      {/* Enhanced Messages with Close Buttons */}
       {error && (
-        <div className="rounded-md bg-red-50 p-4 mb-4">
-          <div className="text-sm text-red-800">{error}</div>
+        <div className="rounded-md bg-red-50 border border-red-200 p-4 mb-4 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <span className="text-red-400">❌</span>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setError('');
+                if (errorTimeoutRef.current) {
+                  clearTimeout(errorTimeoutRef.current);
+                  errorTimeoutRef.current = null;
+                }
+              }}
+              className="ml-4 text-red-400 hover:text-red-600 transition-colors"
+            >
+              <span className="sr-only">Close</span>
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
       {success && (
-        <div className="rounded-md bg-green-50 p-4 mb-4">
-          <div className="text-sm text-green-800">{success}</div>
+        <div className="rounded-md bg-green-50 border border-green-200 p-4 mb-4 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <span className="text-green-400">✅</span>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-green-800">{success}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setSuccess('');
+                if (successTimeoutRef.current) {
+                  clearTimeout(successTimeoutRef.current);
+                  successTimeoutRef.current = null;
+                }
+              }}
+              className="ml-4 text-green-400 hover:text-green-600 transition-colors"
+            >
+              <span className="sr-only">Close</span>
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
