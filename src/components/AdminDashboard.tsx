@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import CreateExchangeUser from './CreateExchangeUser';
 import BankManagement from './BankManagement';
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [showCreateExchange, setShowCreateExchange] = useState(false);
   const [showBankManagement, setShowBankManagement] = useState(false);
 
@@ -31,7 +33,11 @@ export default function AdminDashboard() {
       {/* Statistics Cards */}
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
-          <div key={stat.name} className="bg-white rounded-lg shadow p-4">
+          <div 
+            key={stat.name} 
+            onClick={() => (stat.name === 'Total Orders' || stat.name === 'Pending Orders') ? router.push('/admin/orders') : undefined}
+            className={`bg-white rounded-lg shadow p-4 ${(stat.name === 'Total Orders' || stat.name === 'Pending Orders') ? 'cursor-pointer hover:bg-gray-50 transition-colors' : ''}`}
+          >
             <div className="flex items-center">
               <div className={`p-2 rounded-full ${stat.color} text-white text-lg`}>
                 {stat.icon}
@@ -48,10 +54,21 @@ export default function AdminDashboard() {
       {/* Quick Actions */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <button 
+            onClick={() => router.push('/admin/orders')}
+            className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors"
+          >
+            <div className="text-center">
+              <div className="text-2xl mb-2">📋</div>
+              <div className="text-sm font-medium text-gray-700">Manage Orders</div>
+              <div className="text-xs text-gray-500">Order workflow & monitoring</div>
+            </div>
+          </button>
+          
           <button 
             onClick={() => setShowCreateExchange(true)}
-            className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors"
+            className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors"
           >
             <div className="text-center">
               <div className="text-2xl mb-2">🏪</div>
@@ -62,7 +79,7 @@ export default function AdminDashboard() {
           
           <button 
             onClick={() => setShowBankManagement(true)}
-            className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors"
+            className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-orange-400 hover:bg-orange-50 transition-colors"
           >
             <div className="text-center">
               <div className="text-2xl mb-2">🏦</div>

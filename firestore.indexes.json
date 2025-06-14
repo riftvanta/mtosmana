@@ -75,6 +75,81 @@
         {"fieldPath": "exchangeId", "order": "ASCENDING"},
         {"fieldPath": "timestamps.created", "order": "DESCENDING"}
       ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "timestamps.created", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "timestamps.created", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "priority", "order": "ASCENDING"},
+        {"fieldPath": "timestamps.created", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "exchangeId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "timestamps.created", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "exchangeId", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "timestamps.created", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "orderWorkflowActions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "orderId", "order": "ASCENDING"},
+        {"fieldPath": "timestamp", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "workflowTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "scheduledAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "workflowEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "orderId", "order": "ASCENDING"},
+        {"fieldPath": "timestamp", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "userId", "order": "ASCENDING"},
+        {"fieldPath": "isRead", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
     }
   ],
   "fieldOverrides": [
