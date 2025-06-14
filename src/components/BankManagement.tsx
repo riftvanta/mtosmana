@@ -281,26 +281,28 @@ export default function BankManagement() {
 
       {/* Tab Navigation */}
       <div className="border-b border-gray-200 mb-6">
-        <nav className="-mb-px flex space-x-8">
+        <nav className="-mb-px flex">
           <button
             onClick={() => setActiveTab('banks')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`flex-1 py-3 px-2 border-b-2 font-medium text-sm text-center ${
               activeTab === 'banks'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            Platform Banks ({banks.length})
+            <span className="block sm:inline">Platform Banks</span>
+            <span className="block sm:inline sm:ml-1">({banks.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('assignments')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`flex-1 py-3 px-2 border-b-2 font-medium text-sm text-center ${
               activeTab === 'assignments'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            Bank Assignments ({assignments.length})
+            <span className="block sm:inline">Assignments</span>
+            <span className="block sm:inline sm:ml-1">({assignments.length})</span>
           </button>
         </nav>
       </div>
@@ -381,74 +383,118 @@ export default function BankManagement() {
       {/* Bank Assignments Tab */}
       {activeTab === 'assignments' && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900">Bank Assignments</h3>
-            <button
-              onClick={() => {
-                setShowAssignBank(true);
-                resetAssignmentForm();
-              }}
-              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
-            >
-              Assign Bank
-            </button>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">Bank Assignments</h3>
+              <p className="text-sm text-gray-500">Manage which banks each exchange can access</p>
+            </div>
+            {assignments.length > 0 && (
+              <button
+                onClick={() => {
+                  setShowAssignBank(true);
+                  resetAssignmentForm();
+                }}
+                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm font-medium w-full sm:w-auto"
+              >
+                Assign Bank
+              </button>
+            )}
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Exchange
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Bank
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Assigned Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {assignments.map((assignment) => (
-                  <tr key={assignment.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getExchangeName(assignment.exchangeId)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getBankName(assignment.bankId)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        assignment.assignmentType === 'private'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {assignment.assignmentType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {assignment.assignedAt.toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleRemoveAssignment(assignment.exchangeId, assignment.bankId)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* Assignment Summary */}
+          {assignments.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-blue-800">
+                  <span className="font-medium">{assignments.length}</span> bank assignment{assignments.length !== 1 ? 's' : ''} active
+                </div>
+                <div className="flex items-center space-x-3 text-xs text-blue-600">
+                  <span className="flex items-center">
+                    <span className="w-2 h-2 bg-purple-400 rounded-full mr-1"></span>
+                    {assignments.filter(a => a.assignmentType === 'private').length} Private
+                  </span>
+                  <span className="flex items-center">
+                    <span className="w-2 h-2 bg-blue-400 rounded-full mr-1"></span>
+                    {assignments.filter(a => a.assignmentType === 'public').length} Public
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile-First Assignment Cards */}
+          {assignments.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <div className="text-4xl mb-4">🏦</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Bank Assignments</h3>
+              <p className="text-gray-500 mb-4">
+                Start by assigning banks to exchanges to manage their access.
+              </p>
+              <button
+                onClick={() => {
+                  setShowAssignBank(true);
+                  resetAssignmentForm();
+                }}
+                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+              >
+                Assign First Bank
+              </button>
+            </div>
+          ) : (
+                         <div className="space-y-3">
+               {assignments.map((assignment) => (
+                 <div key={assignment.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-all duration-200">
+                   <div className="flex items-start justify-between mb-3">
+                     <div className="flex-1 min-w-0">
+                       <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 mb-2">
+                         <h4 className="font-semibold text-gray-900 text-base truncate">
+                           {getExchangeName(assignment.exchangeId)}
+                         </h4>
+                         <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full mt-1 sm:mt-0 self-start ${
+                           assignment.assignmentType === 'private'
+                             ? 'bg-purple-100 text-purple-800'
+                             : 'bg-blue-100 text-blue-800'
+                         }`}>
+                           {assignment.assignmentType}
+                         </span>
+                       </div>
+                       
+                       <div className="space-y-1.5 text-sm">
+                         <div className="flex flex-col sm:flex-row sm:items-center">
+                           <span className="font-medium text-gray-700 sm:w-16">Bank:</span>
+                           <span className="text-gray-900 sm:ml-2">{getBankName(assignment.bankId)}</span>
+                         </div>
+                         <div className="flex flex-col sm:flex-row sm:items-center">
+                           <span className="font-medium text-gray-700 sm:w-16">Date:</span>
+                           <span className="text-gray-600 sm:ml-2">{assignment.assignedAt.toLocaleDateString()}</span>
+                         </div>
+                       </div>
+                     </div>
+                     
+                     <button
+                       onClick={() => handleRemoveAssignment(assignment.exchangeId, assignment.bankId)}
+                       className="ml-4 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-3 py-2 rounded-md text-sm font-medium transition-colors min-w-[80px] touch-manipulation flex-shrink-0"
+                     >
+                       Remove
+                     </button>
+                   </div>
+                   
+                   {/* Assignment Type Description */}
+                   <div className="mt-3 pt-3 border-t border-gray-100">
+                     <p className="text-xs text-gray-500 flex items-center">
+                       <span className="mr-2">
+                         {assignment.assignmentType === 'private' ? '🔒' : '🌐'}
+                       </span>
+                       {assignment.assignmentType === 'private' 
+                         ? 'Only this exchange can use this bank'
+                         : 'This bank can be shared with other exchanges'
+                       }
+                     </p>
+                   </div>
+                 </div>
+               ))}
+             </div>
+          )}
         </div>
       )}
 
