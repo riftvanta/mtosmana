@@ -13,7 +13,8 @@ import {
   formatJordanianMobile, 
   calculateCommission, 
   calculateNetAmount,
-  createOrder
+  createOrder,
+  updateOrder
 } from '@/lib/orderOperations';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -21,6 +22,8 @@ interface OutgoingTransferFormProps {
   onOrderCreated: (orderId: string) => void;
   onCancel: () => void;
   userCommissionRate: CommissionRate;
+  editMode?: boolean;
+  existingOrder?: Order;
 }
 
 interface OutgoingTransferData {
@@ -37,20 +40,37 @@ interface OutgoingTransferData {
 const OutgoingTransferForm: React.FC<OutgoingTransferFormProps> = ({
   onOrderCreated,
   onCancel,
-  userCommissionRate
+  userCommissionRate,
+  editMode = false,
+  existingOrder
 }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [formData, setFormData] = useState<OutgoingTransferData>({
-    amount: '',
-    cliqType: 'mobile',
-    aliasName: '',
-    mobileNumber: '',
-    recipientName: '',
-    recipientBank: '',
-    notes: '',
-    priority: 'normal'
+  const [formData, setFormData] = useState<OutgoingTransferData>(() => {
+    if (editMode && existingOrder) {
+      // Pre-populate form with existing order data
+      return {
+        amount: existingOrder.submittedAmount.toString(),
+        cliqType: existingOrder.cliqDetails?.aliasName ? 'alias' : 'mobile',
+        aliasName: existingOrder.cliqDetails?.aliasName || '',
+        mobileNumber: existingOrder.cliqDetails?.mobileNumber || '',
+        recipientName: existingOrder.recipientDetails?.name || '',
+        recipientBank: existingOrder.recipientDetails?.bankName || '',
+        notes: existingOrder.recipientDetails?.notes || '',
+        priority: existingOrder.priority
+      };
+    }
+    return {
+      amount: '',
+      cliqType: 'mobile',
+      aliasName: '',
+      mobileNumber: '',
+      recipientName: '',
+      recipientBank: '',
+      notes: '',
+      priority: 'normal'
+    };
   });
 
   // Jordanian banks and digital wallets
@@ -192,29 +212,53 @@ const OutgoingTransferForm: React.FC<OutgoingTransferFormProps> = ({
         recipientDetails.notes = formData.notes;
       }
 
-      const orderData: Omit<Order, 'id' | 'orderId' | 'workflowHistory' | 'timestamps'> = {
-        exchangeId: user.id,
-        type: 'outgoing' as OrderType,
-        status: 'submitted',
-        priority: formData.priority,
-        submittedAmount: amount,
-        commission,
-        commissionRate: userCommissionRate,
-        netAmount: calculateNetAmount(amount, commission, 'outgoing'),
-        cliqDetails,
-        recipientDetails,
-        screenshots: [],
-        documents: [],
-        source: 'web',
-        tags: ['outgoing', 'cliq'],
-        isBeingEdited: false
-      };
+      if (editMode && existingOrder) {
+        // Update existing order
+        const updates: Partial<Order> = {
+          priority: formData.priority,
+          submittedAmount: amount,
+          commission,
+          commissionRate: userCommissionRate,
+          netAmount: calculateNetAmount(amount, commission, 'outgoing'),
+          cliqDetails,
+          recipientDetails,
+          isBeingEdited: false,
+          editedBy: user.id,
+          lastEditAt: new Date()
+        };
 
-      const orderId = await createOrder(orderData);
-      onOrderCreated(orderId);
+        const success = await updateOrder(existingOrder.orderId, updates);
+        if (success) {
+          onOrderCreated(existingOrder.orderId);
+        } else {
+          setErrors({ submit: 'Failed to update order. Please try again.' });
+        }
+      } else {
+        // Create new order
+        const orderData: Omit<Order, 'id' | 'orderId' | 'workflowHistory' | 'timestamps'> = {
+          exchangeId: user.id,
+          type: 'outgoing' as OrderType,
+          status: 'submitted',
+          priority: formData.priority,
+          submittedAmount: amount,
+          commission,
+          commissionRate: userCommissionRate,
+          netAmount: calculateNetAmount(amount, commission, 'outgoing'),
+          cliqDetails,
+          recipientDetails,
+          screenshots: [],
+          documents: [],
+          source: 'web',
+          tags: ['outgoing', 'cliq'],
+          isBeingEdited: false
+        };
+
+        const orderId = await createOrder(orderData);
+        onOrderCreated(orderId);
+      }
     } catch (error) {
-      console.error('Error creating outgoing transfer:', error);
-      setErrors({ submit: 'Failed to create transfer. Please try again.' });
+      console.error('Error with outgoing transfer:', error);
+      setErrors({ submit: editMode ? 'Failed to update order. Please try again.' : 'Failed to create transfer. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -225,7 +269,9 @@ const OutgoingTransferForm: React.FC<OutgoingTransferFormProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-sm border p-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-900">New Outgoing Transfer</h2>
+        <h2 className="text-xl font-semibold text-gray-900">
+          {editMode ? 'Edit Outgoing Transfer' : 'New Outgoing Transfer'}
+        </h2>
         <button
           onClick={onCancel}
           className="text-gray-500 hover:text-gray-700 p-2"
@@ -481,10 +527,10 @@ const OutgoingTransferForm: React.FC<OutgoingTransferFormProps> = ({
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Creating Transfer...
+                {editMode ? 'Updating Transfer...' : 'Creating Transfer...'}
               </span>
             ) : (
-              'Create Outgoing Transfer'
+              editMode ? 'Update Outgoing Transfer' : 'Create Outgoing Transfer'
             )}
           </button>
           <button

@@ -17,7 +17,8 @@ import {
   calculateCommission, 
   calculateNetAmount,
   createOrder,
-  addOrderFile
+  addOrderFile,
+  updateOrder
 } from '@/lib/orderOperations';
 import { useAuth } from '@/contexts/AuthContext';
 import { uploadFile } from '@/lib/firebase-storage';
@@ -27,6 +28,8 @@ interface IncomingTransferFormProps {
   onCancel: () => void;
   userCommissionRate: CommissionRate;
   assignedBanks: (BankAssignment & { bank: PlatformBank })[];
+  editMode?: boolean;
+  existingOrder?: Order;
 }
 
 interface IncomingTransferData {
@@ -43,19 +46,35 @@ const IncomingTransferForm: React.FC<IncomingTransferFormProps> = ({
   onOrderCreated,
   onCancel,
   userCommissionRate,
-  assignedBanks
+  assignedBanks,
+  editMode = false,
+  existingOrder
 }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [formData, setFormData] = useState<IncomingTransferData>({
-    amount: '',
-    senderName: '',
-    senderBank: '',
-    reference: '',
-    bankId: '',
-    notes: '',
-    priority: 'normal'
+  const [formData, setFormData] = useState<IncomingTransferData>(() => {
+    if (editMode && existingOrder) {
+      // Pre-populate form with existing order data
+      return {
+        amount: existingOrder.submittedAmount.toString(),
+        senderName: existingOrder.senderDetails?.name || '',
+        senderBank: existingOrder.senderDetails?.bankName || '',
+        reference: existingOrder.senderDetails?.reference || '',
+        bankId: existingOrder.bankUsed || '',
+        notes: existingOrder.adminNotes || '',
+        priority: existingOrder.priority
+      };
+    }
+    return {
+      amount: '',
+      senderName: '',
+      senderBank: '',
+      reference: '',
+      bankId: '',
+      notes: '',
+      priority: 'normal'
+    };
   });
 
   // File upload state
@@ -244,32 +263,62 @@ const IncomingTransferForm: React.FC<IncomingTransferFormProps> = ({
           status: 'uploaded'
         }));
 
-      const orderData: Omit<Order, 'id' | 'orderId' | 'workflowHistory' | 'timestamps'> = {
-        exchangeId: user.id,
-        type: 'incoming' as OrderType,
-        status: 'submitted',
-        priority: formData.priority,
-        submittedAmount: amount,
-        finalAmount,
-        commission,
-        commissionRate: userCommissionRate,
-        netAmount: finalAmount,
-        senderDetails: {
-          name: formData.senderName || undefined,
-          bankName: formData.senderBank || undefined,
-          reference: formData.reference || undefined
-        },
-        bankUsed: formData.bankId,
-        screenshots: orderFiles,
-        documents: [],
-        adminNotes: formData.notes || undefined,
-        source: 'web',
-        tags: ['incoming', 'screenshot-verified'],
-        isBeingEdited: false
-      };
+      if (editMode && existingOrder) {
+        // Update existing order
+        const updates: Partial<Order> = {
+          priority: formData.priority,
+          submittedAmount: amount,
+          finalAmount,
+          commission,
+          commissionRate: userCommissionRate,
+          netAmount: finalAmount,
+          senderDetails: {
+            name: formData.senderName || undefined,
+            bankName: formData.senderBank || undefined,
+            reference: formData.reference || undefined
+          },
+          bankUsed: formData.bankId,
+          adminNotes: formData.notes || undefined,
+          isBeingEdited: false,
+          editedBy: user.id,
+          lastEditAt: new Date()
+        };
 
-      const orderId = await createOrder(orderData);
-      onOrderCreated(orderId);
+        const success = await updateOrder(existingOrder.orderId, updates);
+        if (success) {
+          onOrderCreated(existingOrder.orderId);
+        } else {
+          setErrors({ submit: 'Failed to update order. Please try again.' });
+        }
+      } else {
+        // Create new order
+        const orderData: Omit<Order, 'id' | 'orderId' | 'workflowHistory' | 'timestamps'> = {
+          exchangeId: user.id,
+          type: 'incoming' as OrderType,
+          status: 'submitted',
+          priority: formData.priority,
+          submittedAmount: amount,
+          finalAmount,
+          commission,
+          commissionRate: userCommissionRate,
+          netAmount: finalAmount,
+          senderDetails: {
+            name: formData.senderName || undefined,
+            bankName: formData.senderBank || undefined,
+            reference: formData.reference || undefined
+          },
+          bankUsed: formData.bankId,
+          screenshots: orderFiles,
+          documents: [],
+          adminNotes: formData.notes || undefined,
+          source: 'web',
+          tags: ['incoming', 'screenshot-verified'],
+          isBeingEdited: false
+        };
+
+        const orderId = await createOrder(orderData);
+        onOrderCreated(orderId);
+      }
     } catch (error) {
       console.error('Error creating incoming transfer:', error);
       setErrors({ submit: 'Failed to create transfer. Please try again.' });
@@ -283,7 +332,9 @@ const IncomingTransferForm: React.FC<IncomingTransferFormProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-sm border p-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-900">New Incoming Transfer</h2>
+        <h2 className="text-xl font-semibold text-gray-900">
+          {editMode ? 'Edit Incoming Transfer' : 'New Incoming Transfer'}
+        </h2>
         <button
           onClick={onCancel}
           className="text-gray-500 hover:text-gray-700 p-2"
@@ -660,12 +711,12 @@ const IncomingTransferForm: React.FC<IncomingTransferFormProps> = ({
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Creating Transfer...
+                {editMode ? 'Updating Transfer...' : 'Creating Transfer...'}
               </span>
             ) : uploadingFiles.length > 0 ? (
               'Uploading Files...'
             ) : (
-              'Create Incoming Transfer'
+              editMode ? 'Update Incoming Transfer' : 'Create Incoming Transfer'
             )}
           </button>
           <button

@@ -191,10 +191,10 @@ export function calculateNetAmount(submittedAmount: number, commission: number, 
  */
 export function isValidStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus, userRole: 'admin' | 'exchange'): boolean {
   const adminTransitions: Record<OrderStatus, OrderStatus[]> = {
-    'submitted': ['pending_review', 'cancelled'],
-    'pending_review': ['approved', 'rejected', 'cancelled'],
-    'approved': ['processing', 'cancelled'],
-    'rejected': ['pending_review'], // Admin can reopen
+    'submitted': ['processing', 'rejected', 'cancelled'], // Admin approves by moving to processing
+    'pending_review': ['processing', 'rejected', 'cancelled'], // Keep for backwards compatibility
+    'approved': ['processing', 'cancelled'], // Keep for backwards compatibility
+    'rejected': ['processing'], // Admin can reopen rejected orders by moving to processing
     'processing': ['completed', 'cancelled'],
     'completed': [], // Final state
     'cancelled': [], // Final state
@@ -221,10 +221,10 @@ export function isValidStatusTransition(currentStatus: OrderStatus, newStatus: O
  */
 export function getNextAllowedStatuses(currentStatus: OrderStatus, userRole: 'admin' | 'exchange'): OrderStatus[] {
   const adminTransitions: Record<OrderStatus, OrderStatus[]> = {
-    'submitted': ['pending_review', 'cancelled'],
-    'pending_review': ['approved', 'rejected', 'cancelled'],
-    'approved': ['processing', 'cancelled'],
-    'rejected': ['pending_review'],
+    'submitted': ['processing', 'rejected', 'cancelled'], // Admin approves by moving to processing
+    'pending_review': ['processing', 'rejected', 'cancelled'], // Keep for backwards compatibility
+    'approved': ['processing', 'cancelled'], // Keep for backwards compatibility
+    'rejected': ['processing'], // Admin can reopen rejected orders by moving to processing
     'processing': ['completed', 'cancelled'],
     'completed': [],
     'cancelled': [],
@@ -328,6 +328,63 @@ export async function createOrder(orderData: Omit<Order, 'id' | 'orderId' | 'wor
   );
 
   return docRef.id;
+}
+
+/**
+ * Update order details (for editing submitted orders)
+ */
+export async function updateOrder(orderId: string, updates: Partial<Order>): Promise<boolean> {
+  try {
+    return await runTransaction(db, async (transaction) => {
+      // Get current order
+      const orderQuery = query(collection(db, 'orders'), where('orderId', '==', orderId));
+      const orderSnapshot = await getDocs(orderQuery);
+      
+      if (orderSnapshot.empty) {
+        throw new Error('Order not found');
+      }
+
+      const orderDoc = orderSnapshot.docs[0];
+      const currentOrder = orderDoc.data() as Order;
+      
+      // Only allow editing submitted orders
+      if (currentOrder.status !== 'submitted') {
+        throw new Error('Only submitted orders can be edited');
+      }
+
+      // Prepare updates with timestamp
+      const orderUpdates: Partial<Order> = {
+        ...updates,
+        timestamps: {
+          ...currentOrder.timestamps,
+          updated: new Date()
+        }
+      };
+
+      // Update order
+      transaction.update(orderDoc.ref, orderUpdates);
+
+      // Create workflow action for the edit
+      const workflowActionRef = doc(collection(db, 'orderWorkflowActions'));
+      const workflowAction: Omit<OrderWorkflowAction, 'id'> = {
+        orderId,
+        action: 'edit',
+        performedBy: updates.editedBy || 'unknown',
+        performedByRole: 'exchange',
+        previousStatus: currentOrder.status,
+        newStatus: currentOrder.status,
+        notes: 'Order details updated',
+        timestamp: new Date()
+      };
+      
+      transaction.set(workflowActionRef, workflowAction);
+
+      return true;
+    });
+  } catch (error) {
+    console.error('Error updating order:', error);
+    return false;
+  }
 }
 
 /**

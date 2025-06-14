@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   Order, 
   OrderStatus, 
@@ -15,13 +16,16 @@ import {
 } from '@/types';
 import { 
   getOrders, 
+  getOrder,
   updateOrderStatus, 
   getOrderStatistics,
-  bulkUpdateOrderStatus
+  bulkUpdateOrderStatus,
+  getNextAllowedStatuses
 } from '@/lib/orderOperations';
 import { useAuth } from '@/contexts/AuthContext';
 import OutgoingTransferForm from './OutgoingTransferForm';
 import IncomingTransferForm from './IncomingTransferForm';
+import OrderStatusWorkflow from './OrderStatusWorkflow';
 import IndexBuildingNotice from './IndexBuildingNotice';
 
 interface OrderManagementProps {
@@ -31,7 +35,7 @@ interface OrderManagementProps {
   platformBanks?: PlatformBank[];
 }
 
-type ViewMode = 'list' | 'create-outgoing' | 'create-incoming' | 'view-order';
+type ViewMode = 'list' | 'create-outgoing' | 'create-incoming' | 'view-order' | 'edit-order';
 
 const OrderManagement: React.FC<OrderManagementProps> = ({
   userRole,
@@ -40,9 +44,24 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
   platformBanks = []
 }) => {
   const { user } = useAuth();
+  const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [loadingOrder, setLoadingOrder] = useState(false);
   
+  // Status update modal state
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateTargetOrder, setUpdateTargetOrder] = useState<Order | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<OrderStatus | ''>('');
+  const [updateNotes, setUpdateNotes] = useState('');
+  const [updateReason, setUpdateReason] = useState('');
+
+  // Cancel confirmation modal state
+  const [showCancelModal, setCancelModal] = useState(false);
+  const [cancelTargetOrder, setCancelTargetOrder] = useState<Order | null>(null);
+  const [cancelAction, setCancelAction] = useState<'cancel' | 'request'>('cancel');
+
   // Order list state
   const [orders, setOrders] = useState<PaginatedResponse<Order>>({
     items: [],
@@ -70,6 +89,29 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
   // Selection for bulk operations
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  // Load single order for viewing
+  const loadOrder = useCallback(async (orderId: string) => {
+    if (!orderId) return;
+
+    setLoadingOrder(true);
+    try {
+      const order = await getOrder(orderId);
+      setSelectedOrder(order);
+    } catch (err) {
+      console.error('Error loading order:', err);
+      setError('Failed to load order details');
+    } finally {
+      setLoadingOrder(false);
+    }
+  }, []);
+
+  // Load order when selectedOrderId changes and we're in view mode
+  useEffect(() => {
+    if (selectedOrderId && viewMode === 'view-order') {
+      loadOrder(selectedOrderId);
+    }
+  }, [selectedOrderId, viewMode, loadOrder]);
 
   // Load orders
   const loadOrders = useCallback(async () => {
@@ -173,26 +215,49 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
     // Show success message or redirect to view the created order
   }, [loadOrders, loadStatistics]);
 
-  const handleStatusUpdate = async (orderId: string, newStatus: OrderStatus, notes?: string, reason?: string) => {
-    if (!user) return;
+  // Handle status update
+  const handleStatusUpdateSubmit = async () => {
+    if (!updateTargetOrder || !updateStatus || !user) return;
 
     try {
       const success = await updateOrderStatus(
-        orderId,
-        newStatus,
+        updateTargetOrder.orderId,
+        updateStatus as OrderStatus,
         user.id,
         userRole,
-        notes,
-        reason
+        updateNotes || undefined,
+        updateReason || undefined
       );
 
       if (success) {
         loadOrders();
         loadStatistics();
+        setShowUpdateModal(false);
+        // Refresh the selected order if we're in view mode
+        if (viewMode === 'view-order' && selectedOrderId) {
+          loadOrder(selectedOrderId);
+        }
       }
     } catch (err) {
       console.error('Error updating order status:', err);
       setError('Failed to update order status');
+    }
+  };
+
+  // Get allowed status transitions for the update modal
+  const getAllowedStatusOptions = (currentStatus: OrderStatus) => {
+    const allowedStatuses = getNextAllowedStatuses(currentStatus, userRole);
+    return allowedStatuses;
+  };
+
+  // Get user-friendly status label
+  const getStatusLabel = (status: OrderStatus): string => {
+    switch (status) {
+      case 'processing': return 'APPROVE & PROCESS';
+      case 'rejected': return 'REJECT';
+      case 'completed': return 'COMPLETE';
+      case 'cancelled': return 'CANCEL';
+      default: return status.replace('_', ' ').toUpperCase();
     }
   };
 
@@ -304,6 +369,98 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
     }
   };
 
+  // Handle simple cancellation for submitted orders
+  const handleCancelOrder = async (order: Order) => {
+    setCancelTargetOrder(order);
+    setCancelAction('cancel');
+    setCancelModal(true);
+  };
+
+  // Handle cancellation request for processing orders
+  const handleRequestCancellation = async (order: Order) => {
+    setCancelTargetOrder(order);
+    setCancelAction('request');
+    setCancelModal(true);
+  };
+
+  // Execute the actual cancellation
+  const executeCancellation = async () => {
+    if (!cancelTargetOrder || !user) return;
+
+    try {
+      const targetStatus = cancelAction === 'cancel' ? 'cancelled' : 'cancellation_requested';
+      const notes = cancelAction === 'cancel' ? 'Order cancelled by user' : 'Cancellation requested by user';
+      const reason = cancelAction === 'cancel' ? 'User cancellation' : 'User requested cancellation';
+
+      const success = await updateOrderStatus(
+        cancelTargetOrder.orderId,
+        targetStatus,
+        user.id,
+        userRole,
+        notes,
+        reason
+      );
+
+      if (success) {
+        loadOrders();
+        loadStatistics();
+        setCancelModal(false);
+        setCancelTargetOrder(null);
+      }
+    } catch (err) {
+      console.error('Error processing cancellation:', err);
+      setError('Failed to process cancellation');
+    }
+  };
+
+  // Get cancel button for order based on status
+  const getCancelButton = (order: Order) => {
+    if (order.status === 'submitted') {
+      return (
+        <button
+          onClick={() => handleCancelOrder(order)}
+          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm font-medium"
+        >
+          Cancel Order
+        </button>
+      );
+    } else if (order.status === 'processing') {
+      return (
+        <button
+          onClick={() => handleRequestCancellation(order)}
+          className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium"
+        >
+          Request Cancellation
+        </button>
+      );
+    }
+    return null;
+  };
+
+  // Get cancel button for table view (text links)
+  const getCancelButtonForTable = (order: Order) => {
+    if (order.status === 'submitted') {
+      return (
+        <button
+          onClick={() => handleCancelOrder(order)}
+          className="text-red-600 hover:text-red-900"
+        >
+          Cancel
+        </button>
+      );
+    } else if (order.status === 'processing') {
+      return (
+        <button
+          onClick={() => handleRequestCancellation(order)}
+          className="text-orange-600 hover:text-orange-900"
+        >
+          Request Cancellation
+        </button>
+      );
+    }
+    return null;
+  };
+
   if (viewMode === 'create-outgoing' && userCommissionRate) {
     return (
       <OutgoingTransferForm
@@ -325,13 +482,197 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
     );
   }
 
+  if (viewMode === 'edit-order' && selectedOrder && userCommissionRate) {
+    if (selectedOrder.type === 'outgoing') {
+      return (
+        <OutgoingTransferForm
+          onOrderCreated={(orderId) => {
+            // Reload the order and go back to view mode
+            loadOrder(orderId);
+            setViewMode('view-order');
+          }}
+          onCancel={() => setViewMode('view-order')}
+          userCommissionRate={userCommissionRate}
+          editMode={true}
+          existingOrder={selectedOrder}
+        />
+      );
+    } else {
+      return (
+        <IncomingTransferForm
+          onOrderCreated={(orderId) => {
+            // Reload the order and go back to view mode
+            loadOrder(orderId);
+            setViewMode('view-order');
+          }}
+          onCancel={() => setViewMode('view-order')}
+          userCommissionRate={userCommissionRate}
+          assignedBanks={assignedBanks}
+          editMode={true}
+          existingOrder={selectedOrder}
+        />
+      );
+    }
+  }
+
+  if (viewMode === 'view-order') {
+    return (
+      <div className="space-y-6">
+        {/* Header with Back Button */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <button
+              onClick={() => {
+                setViewMode('list');
+                setSelectedOrderId(null);
+                setSelectedOrder(null);
+              }}
+              className="mr-4 p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Order Details</h1>
+              <p className="text-gray-600">View and manage order: {selectedOrderId}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Order Details Content */}
+        {loadingOrder ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-600">Loading order details...</p>
+          </div>
+        ) : selectedOrder ? (
+          <div className="space-y-6">
+            {/* Order Information Card */}
+            <div className="bg-white rounded-lg shadow border p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Information</h3>
+              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Order ID</p>
+                  <p className="text-sm text-gray-900">{selectedOrder.orderId}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Type</p>
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                    selectedOrder.type === 'incoming' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {selectedOrder.type}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Status</p>
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedOrder.status)}`}>
+                    {selectedOrder.status.replace('_', ' ')}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Amount</p>
+                  <p className="text-sm text-gray-900">{selectedOrder.submittedAmount.toFixed(2)} JOD</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Commission</p>
+                  <p className="text-sm text-gray-900">{selectedOrder.commission.toFixed(2)} JOD</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Priority</p>
+                  <span className={`text-sm font-medium ${getPriorityColor(selectedOrder.priority)}`}>
+                    {selectedOrder.priority}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Created</p>
+                  <p className="text-sm text-gray-900">{formatDate(selectedOrder.timestamps.created)}</p>
+                </div>
+                {selectedOrder.senderDetails && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Sender</p>
+                    <p className="text-sm text-gray-900">{selectedOrder.senderDetails.name}</p>
+                  </div>
+                )}
+                {selectedOrder.recipientDetails && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Recipient</p>
+                    <p className="text-sm text-gray-900">{selectedOrder.recipientDetails.name}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            {(getCancelButton(selectedOrder) || (selectedOrder.status === 'submitted' && userRole === 'exchange')) && (
+              <div className="bg-white rounded-lg shadow border p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                <div className="flex gap-3">
+                  {selectedOrder.status === 'submitted' && userRole === 'exchange' && (
+                    <button
+                      onClick={() => setViewMode('edit-order')}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                    >
+                      <svg className="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit Order
+                    </button>
+                  )}
+                  {getCancelButton(selectedOrder)}
+                </div>
+              </div>
+            )}
+
+            {/* Order Workflow */}
+            <OrderStatusWorkflow
+              order={selectedOrder}
+              onOrderUpdated={(updatedOrder) => {
+                setSelectedOrder(updatedOrder);
+                loadOrders();
+                loadStatistics();
+              }}
+              userRole={userRole}
+            />
+          </div>
+        ) : (
+          <div className="p-8 text-center">
+            <div className="text-red-600 mb-2">
+              <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p className="text-red-600">Order not found</p>
+            <button
+              onClick={() => setViewMode('list')}
+              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Back to List
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header and Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Order Management</h1>
-          <p className="text-gray-600">Manage and track transfer orders</p>
+        <div className="flex items-center">
+          <button
+            onClick={() => router.back()}
+            className="mr-4 p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
+            title="Go back"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Order Management</h1>
+            <p className="text-gray-600">Manage and track transfer orders</p>
+          </div>
         </div>
         
         {userRole === 'exchange' && (
@@ -494,11 +835,11 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
             </span>
             <div className="flex gap-2">
               <button
-                onClick={() => handleBulkStatusUpdate('approved')}
+                onClick={() => handleBulkStatusUpdate('processing')}
                 disabled={bulkLoading}
                 className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:bg-gray-400"
               >
-                Approve
+                Approve & Process
               </button>
               <button
                 onClick={() => handleBulkStatusUpdate('rejected')}
@@ -688,16 +1029,21 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
                         >
                           View
                         </button>
-                        {canUpdateStatus(order.status) && (
+                        {userRole === 'admin' && canUpdateStatus(order.status) && (
                           <button
                             onClick={() => {
-                              // Handle status update - could open a modal
+                              setShowUpdateModal(true);
+                              setUpdateTargetOrder(order);
+                              setUpdateStatus(order.status);
+                              setUpdateNotes('');
+                              setUpdateReason('');
                             }}
                             className="text-green-600 hover:text-green-900"
                           >
                             Update
                           </button>
                         )}
+                        {getCancelButtonForTable(order)}
                       </td>
                     </tr>
                   ))}
@@ -744,16 +1090,21 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
                       >
                         View
                       </button>
-                      {canUpdateStatus(order.status) && (
+                      {userRole === 'admin' && canUpdateStatus(order.status) && (
                         <button
                           onClick={() => {
-                            // Handle status update
+                            setShowUpdateModal(true);
+                            setUpdateTargetOrder(order);
+                            setUpdateStatus(order.status);
+                            setUpdateNotes('');
+                            setUpdateReason('');
                           }}
                           className="text-green-600 hover:text-green-900 text-sm"
                         >
                           Update
                         </button>
                       )}
+                      {getCancelButtonForTable(order)}
                     </div>
                   </div>
                 </div>
@@ -835,6 +1186,150 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
           </>
         )}
       </div>
+
+      {/* Status Update Modal */}
+      {showUpdateModal && updateTargetOrder && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <h2 className="text-2xl font-bold mb-4">Update Order Status</h2>
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                Current Status: <span className="font-medium">{updateTargetOrder.status.replace('_', ' ')}</span>
+              </p>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Status
+                </label>
+                <select
+                  value={updateStatus}
+                  onChange={(e) => setUpdateStatus(e.target.value as OrderStatus)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Status</option>
+                  {getAllowedStatusOptions(updateTargetOrder.status).map(status => (
+                    <option key={status} value={status}>
+                      {getStatusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  value={updateNotes}
+                  onChange={(e) => setUpdateNotes(e.target.value)}
+                  placeholder="Add notes about this status change"
+                  rows={3}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason (Optional)
+                </label>
+                <textarea
+                  value={updateReason}
+                  onChange={(e) => setUpdateReason(e.target.value)}
+                  placeholder="Reason for this status change"
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex space-x-3">
+              <button
+                onClick={handleStatusUpdateSubmit}
+                disabled={!updateStatus}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Update Status
+              </button>
+              <button
+                onClick={() => {
+                  setShowUpdateModal(false);
+                  setUpdateStatus('');
+                  setUpdateNotes('');
+                  setUpdateReason('');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && cancelTargetOrder && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full mx-4">
+            {/* Header with Icon */}
+            <div className="flex items-center mb-6">
+              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                cancelAction === 'cancel' ? 'bg-red-100' : 'bg-orange-100'
+              }`}>
+                <svg className={`w-6 h-6 ${
+                  cancelAction === 'cancel' ? 'text-red-600' : 'text-orange-600'
+                }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5C3.312 16.333 4.27 18 5.81 18z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {cancelAction === 'cancel' ? 'Cancel Order' : 'Request Cancellation'}
+                </h3>
+                <p className="text-sm text-gray-500">Order {cancelTargetOrder.orderId}</p>
+              </div>
+            </div>
+
+            {/* Question */}
+            <div className="mb-6">
+              <p className="text-gray-700 font-medium mb-2">
+                {cancelAction === 'cancel' 
+                  ? `Are you sure you want to cancel order ${cancelTargetOrder.orderId}?`
+                  : `Are you sure you want to request cancellation for order ${cancelTargetOrder.orderId}?`
+                }
+              </p>
+              
+              {/* Consequences */}
+              <p className="text-sm text-gray-600">
+                {cancelAction === 'cancel' 
+                  ? 'This action will immediately cancel the order and cannot be undone. You will need to create a new order if needed.'
+                  : 'This will send a cancellation request to the admin for review. The order will remain in processing until the admin makes a decision.'
+                }
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setCancelModal(false);
+                  setCancelTargetOrder(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 font-medium"
+              >
+                Keep Order
+              </button>
+              <button
+                onClick={executeCancellation}
+                className={`flex-1 px-4 py-2 text-white rounded-md focus:outline-none focus:ring-2 font-medium ${
+                  cancelAction === 'cancel'
+                    ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+                    : 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
+                }`}
+              >
+                {cancelAction === 'cancel' ? 'Cancel Order' : 'Request Cancellation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
