@@ -156,6 +156,7 @@ export default function BankManagement() {
     if (result.success) {
       setSuccess('Bank updated successfully');
       setEditingBank(null);
+      setShowAddBank(false); // Close the modal automatically
       resetBankForm();
     } else {
       setError(result.error || 'Failed to update bank');
