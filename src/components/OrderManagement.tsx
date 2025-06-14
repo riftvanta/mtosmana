@@ -254,6 +254,56 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
     return ['submitted', 'approved', 'processing'].includes(currentStatus);
   };
 
+  // Safe date formatting function to handle various timestamp formats
+  const formatDate = (timestamp: Date | number | string | { toDate?: () => Date; seconds?: number } | null | undefined): string => {
+    try {
+      if (!timestamp) return 'Unknown date';
+      
+      let date: Date;
+      
+      // Handle Firestore Timestamp object
+      if (timestamp && typeof timestamp === 'object' && 'toDate' in timestamp && typeof timestamp.toDate === 'function') {
+        date = timestamp.toDate();
+      }
+      // Handle Date object
+      else if (timestamp instanceof Date) {
+        date = timestamp;
+      }
+      // Handle Unix timestamp (seconds)
+      else if (typeof timestamp === 'number' && timestamp > 1000000000 && timestamp < 10000000000) {
+        date = new Date(timestamp * 1000);
+      }
+      // Handle Unix timestamp (milliseconds)
+      else if (typeof timestamp === 'number' && timestamp > 1000000000000) {
+        date = new Date(timestamp);
+      }
+      // Handle string dates
+      else if (typeof timestamp === 'string') {
+        date = new Date(timestamp);
+      }
+      // Handle object with seconds property (Firestore format)
+      else if (timestamp && typeof timestamp === 'object' && timestamp.seconds) {
+        date = new Date(timestamp.seconds * 1000);
+      }
+      // Fallback to current date
+      else {
+        console.warn('Unknown timestamp format:', timestamp);
+        return 'Unknown date';
+      }
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date created from timestamp:', timestamp);
+        return 'Unknown date';
+      }
+      
+      return date.toLocaleDateString();
+    } catch (error) {
+      console.error('Error formatting date:', error, 'Timestamp:', timestamp);
+      return 'Unknown date';
+    }
+  };
+
   if (viewMode === 'create-outgoing' && userCommissionRate) {
     return (
       <OutgoingTransferForm
@@ -626,7 +676,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(order.timestamps.created).toLocaleDateString()}
+                        {formatDate(order.timestamps.created)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                         <button
@@ -662,7 +712,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="font-medium text-gray-900">{order.orderId}</div>
-                      <div className="text-sm text-gray-500">{new Date(order.timestamps.created).toLocaleDateString()}</div>
+                      <div className="text-sm text-gray-500">{formatDate(order.timestamps.created)}</div>
                     </div>
                     <div className="text-right">
                       <div className="font-medium text-gray-900">{order.submittedAmount.toFixed(2)} JOD</div>
