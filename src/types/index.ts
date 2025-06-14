@@ -26,7 +26,7 @@ export interface User {
     outgoing: CommissionRate; // can be fixed JOD or percentage
   };
   assignedBanks: string[]; // array of bank IDs
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'suspended';
   createdAt: Date;
   updatedAt: Date;
 }
