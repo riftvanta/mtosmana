@@ -25,6 +25,217 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Enhanced Contrast Utilities for Order Management */
+.text-high-contrast {
+  color: #1a1a1a !important;
+  font-weight: 600 !important;
+}
+
+.text-medium-contrast {
+  color: #374151 !important;
+  font-weight: 500 !important;
+}
+
+.text-low-contrast {
+  color: #4b5563 !important;
+}
+
+/* Enhanced Status Badges */
+.status-submitted {
+  background-color: #dbeafe !important;
+  color: #1e3a8a !important;
+  border: 2px solid #93c5fd !important;
+}
+
+.status-pending {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  border: 2px solid #fcd34d !important;
+}
+
+.status-approved {
+  background-color: #dcfce7 !important;
+  color: #14532d !important;
+  border: 2px solid #86efac !important;
+}
+
+.status-processing {
+  background-color: #f3e8ff !important;
+  color: #581c87 !important;
+  border: 2px solid #c4b5fd !important;
+}
+
+.status-completed {
+  background-color: #d1fae5 !important;
+  color: #064e3b !important;
+  border: 2px solid #6ee7b7 !important;
+}
+
+.status-rejected {
+  background-color: #fee2e2 !important;
+  color: #7f1d1d !important;
+  border: 2px solid #fca5a5 !important;
+}
+
+.status-cancelled {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  border: 2px solid #d1d5db !important;
+}
+
+/* Enhanced Priority Badges */
+.priority-high {
+  background-color: #fef2f2 !important;
+  color: #991b1b !important;
+  border: 2px solid #fecaca !important;
+}
+
+.priority-normal {
+  background-color: #eff6ff !important;
+  color: #1e40af !important;
+  border: 2px solid #bfdbfe !important;
+}
+
+.priority-low {
+  background-color: #f9fafb !important;
+  color: #1f2937 !important;
+  border: 2px solid #e5e7eb !important;
+}
+
+/* Enhanced Form Inputs */
+.form-input-enhanced {
+  border: 2px solid #d1d5db !important;
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+.form-input-enhanced::placeholder {
+  color: #6b7280 !important;
+}
+
+.form-input-enhanced:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+  outline: none !important;
+}
+
+.form-label-enhanced {
+  color: #1f2937 !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+}
+
+/* Enhanced Cards */
+.card-enhanced {
+  background-color: #ffffff !important;
+  border: 2px solid #e5e7eb !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+.card-enhanced:hover {
+  border-color: #d1d5db !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Enhanced Statistics Cards */
+.stat-card-enhanced {
+  background-color: #ffffff !important;
+  border: 2px solid #e5e7eb !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Enhanced Buttons */
+.btn-primary-enhanced {
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  border: 2px solid #1e40af !important;
+  font-weight: 600 !important;
+}
+
+.btn-primary-enhanced:hover {
+  background-color: #1e40af !important;
+  border-color: #1e3a8a !important;
+}
+
+.btn-secondary-enhanced {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  border: 2px solid #d1d5db !important;
+  font-weight: 600 !important;
+}
+
+.btn-secondary-enhanced:hover {
+  background-color: #e5e7eb !important;
+  border-color: #9ca3af !important;
+}
+
+/* Enhanced Table Styles */
+.table-row-enhanced {
+  border-bottom: 2px solid #e5e7eb !important;
+}
+
+.table-row-enhanced:hover {
+  background-color: #eff6ff !important;
+}
+
+.table-header-enhanced {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  font-weight: 700 !important;
+  border-bottom: 2px solid #d1d5db !important;
+}
+
+/* Enhanced Connection Status */
+.connection-online {
+  background-color: #dcfce7 !important;
+  color: #14532d !important;
+  border: 2px solid #4ade80 !important;
+}
+
+.connection-offline {
+  background-color: #fee2e2 !important;
+  color: #7f1d1d !important;
+  border: 2px solid #f87171 !important;
+}
+
+/* Enhanced Notification Styles */
+.notification-success {
+  background-color: #f0fdf4 !important;
+  color: #14532d !important;
+  border: 2px solid #86efac !important;
+}
+
+.notification-error {
+  background-color: #fef2f2 !important;
+  color: #7f1d1d !important;
+  border: 2px solid #fca5a5 !important;
+}
+
+.notification-warning {
+  background-color: #fffbeb !important;
+  color: #92400e !important;
+  border: 2px solid #fcd34d !important;
+}
+
+.notification-info {
+  background-color: #eff6ff !important;
+  color: #1e40af !important;
+  border: 2px solid #93c5fd !important;
+}
+
+/* Enhanced Focus Styles for Accessibility */
+.focus-enhanced:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2) !important;
+  border-color: #2563eb !important;
+}
+
+.focus-enhanced:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2) !important;
+  border-color: #2563eb !important;
+}
+
 /* Enhanced Real-time Notification Styles */
 @keyframes notification-pulse {
   0% {
