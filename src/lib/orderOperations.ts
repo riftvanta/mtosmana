@@ -275,13 +275,13 @@ export async function createWorkflowAction(
   };
 
   // Only include optional fields if they have values
-  if (notes) {
+  if (notes !== undefined && notes !== null && notes.trim() !== '') {
     workflowAction.notes = notes;
   }
-  if (reason) {
+  if (reason !== undefined && reason !== null && reason.trim() !== '') {
     workflowAction.reason = reason;
   }
-  if (metadata) {
+  if (metadata !== undefined && metadata !== null && Object.keys(metadata).length > 0) {
     workflowAction.metadata = metadata;
   }
 
@@ -414,7 +414,7 @@ export async function updateOrderStatus(
 
       // Prepare updates
       const updates: Partial<Order> = {
-        ...additionalUpdates,
+        ...(additionalUpdates || {}),
         status: newStatus,
         timestamps: {
           ...currentOrder.timestamps,
@@ -428,17 +428,31 @@ export async function updateOrderStatus(
 
       // Create workflow action
       const workflowActionRef = doc(collection(db, 'orderWorkflowActions'));
-      const workflowAction: Omit<OrderWorkflowAction, 'id'> = {
+      const workflowAction: Partial<Omit<OrderWorkflowAction, 'id'>> & {
+        orderId: string;
+        action: OrderAction;
+        performedBy: string;
+        performedByRole: 'admin' | 'exchange';
+        previousStatus: OrderStatus;
+        newStatus: OrderStatus;
+        timestamp: Date;
+      } = {
         orderId,
         action: getActionFromStatusTransition(currentOrder.status, newStatus),
         performedBy,
         performedByRole,
         previousStatus: currentOrder.status,
         newStatus,
-        notes,
-        reason,
         timestamp: new Date()
       };
+
+      // Only include optional fields if they have values
+      if (notes !== undefined && notes !== null && notes.trim() !== '') {
+        workflowAction.notes = notes;
+      }
+      if (reason !== undefined && reason !== null && reason.trim() !== '') {
+        workflowAction.reason = reason;
+      }
       
       transaction.set(workflowActionRef, workflowAction);
 

@@ -1,10 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Order,
-  OrderStatus
+  OrderStatus,
+  OrderFile
 } from '@/types';
+import { updateOrderStatus, getNextAllowedStatuses } from '@/lib/orderOperations';
+import EnhancedFileUpload from './EnhancedFileUpload';
 
 interface OrderStatusWorkflowProps {
   order: Order;
@@ -13,237 +16,453 @@ interface OrderStatusWorkflowProps {
   className?: string;
 }
 
+// Mock platform banks - replace with actual data from Firebase
+const PLATFORM_BANKS = [
+  { id: 'bank1', name: 'Arab Bank', accountNumber: '**** 1234' },
+  { id: 'bank2', name: 'Cairo Amman Bank', accountNumber: '**** 5678' },
+  { id: 'bank3', name: 'Jordan Kuwait Bank', accountNumber: '**** 9012' },
+];
+
 const OrderStatusWorkflow: React.FC<OrderStatusWorkflowProps> = ({
   order,
+  onOrderUpdated,
+  userRole,
   className = ''
 }) => {
-  const getStatusColor = (status: OrderStatus): string => {
-    switch (status) {
-      case 'submitted': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'pending_review': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'approved': return 'bg-green-100 text-green-800 border-green-200';
-      case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
-      case 'processing': return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'completed': return 'bg-green-100 text-green-800 border-green-200';
-      case 'cancelled': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'cancellation_requested': return 'bg-orange-100 text-orange-800 border-orange-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+  const [loading, setLoading] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [completionData, setCompletionData] = useState({
+    screenshots: [] as OrderFile[],
+    platformBank: '',
+    notes: ''
+  });
+
+  // Handle status update actions
+  const handleStatusUpdate = async (newStatus: OrderStatus, notes?: string) => {
+    if (!order || loading) return;
+
+    // For completing outgoing orders, show completion modal
+    if (newStatus === 'completed' && order.type === 'outgoing') {
+      setShowCompletionModal(true);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const success = await updateOrderStatus(
+        order.orderId,
+        newStatus,
+        'admin',
+        userRole,
+        notes && notes.trim() ? notes.trim() : undefined
+      );
+
+      if (success) {
+        const updatedOrder = {
+          ...order,
+          status: newStatus,
+          timestamps: {
+            ...order.timestamps,
+            updated: new Date(),
+            [newStatus]: new Date()
+          }
+        };
+        onOrderUpdated(updatedOrder);
+      }
+    } catch (error) {
+      console.error('Error updating order status:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusIcon = (status: OrderStatus) => {
-    switch (status) {
-      case 'submitted':
-        return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        );
-      case 'pending_review':
-        return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-      case 'approved':
-        return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-      case 'rejected':
-        return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-      case 'processing':
-        return (
-          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-        );
-      case 'completed':
-        return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        );
-      case 'cancelled':
-        return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        );
-      default:
-        return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-    }
-  };
-
-  // Workflow progress visualization - dynamic based on order status
-  const getWorkflowSteps = () => {
-    // For cancelled orders, show the path that was taken
-    if (order.status === 'cancelled') {
-      return [
-        { status: 'submitted', label: 'Submitted', description: 'Order has been submitted' },
-        { status: 'cancelled', label: 'Cancelled', description: 'Order has been cancelled' }
-      ];
-    }
+  // Handle file upload completion
+  const handleFileUploadComplete = (urls: string[]) => {
+    // Convert URLs to OrderFile objects for consistency
+    const screenshots: OrderFile[] = urls.map((url, index) => ({
+      id: `temp-${Date.now()}-${index}`,
+      fileName: `payment-proof-${Date.now()}-${index}`,
+      originalName: `payment-proof-${Date.now()}-${index}.jpg`,
+      fileType: 'image/jpeg',
+      fileSize: 0, // Size not available from URL
+      url,
+      uploadedBy: 'admin',
+      uploadedByRole: 'admin' as const,
+      uploadedAt: new Date(),
+      category: 'receipt' as const,
+      isRequired: true,
+      status: 'uploaded' as const
+    }));
     
-    // For rejected orders
-    if (order.status === 'rejected') {
-      return [
-        { status: 'submitted', label: 'Submitted', description: 'Order has been submitted' },
-        { status: 'rejected', label: 'Rejected', description: 'Order has been rejected' }
-      ];
-    }
-    
-    // For cancellation requested orders
-    if (order.status === 'cancellation_requested') {
-      return [
-        { status: 'submitted', label: 'Submitted', description: 'Order has been submitted' },
-        { status: 'processing', label: 'Processing', description: 'Order is being processed' },
-        { status: 'cancellation_requested', label: 'Cancellation Requested', description: 'Cancellation has been requested' }
-      ];
-    }
-    
-    // For normal workflow
-    return [
-      { status: 'submitted', label: 'Submitted', description: 'Order has been submitted' },
-      { status: 'processing', label: 'Processing', description: 'Order is approved and being processed' },
-      { status: 'completed', label: 'Completed', description: 'Order has been completed' }
-    ];
+    setCompletionData({
+      ...completionData,
+      screenshots
+    });
   };
 
-  const workflowSteps = getWorkflowSteps();
+  // Handle outgoing order completion with screenshot and platform bank
+  const handleCompleteOutgoing = async () => {
+    if (completionData.screenshots.length === 0 || !completionData.platformBank) {
+      alert('Please upload payment proof and select platform bank');
+      return;
+    }
 
-  const getCurrentStepIndex = () => {
-    const index = workflowSteps.findIndex(step => step.status === order.status);
-    return index >= 0 ? index : workflowSteps.length - 1; // Default to last step if not found
+    setLoading(true);
+
+    try {
+      // TODO: Update order with platform bank information and screenshot URLs
+      
+      const success = await updateOrderStatus(
+        order.orderId,
+        'completed',
+        'admin',
+        userRole,
+        completionData.notes.trim() || undefined
+      );
+
+      if (success) {
+        const updatedOrder = {
+          ...order,
+          status: 'completed' as OrderStatus,
+          platformBankUsed: completionData.platformBank,
+          screenshots: [...order.screenshots, ...completionData.screenshots],
+          timestamps: {
+            ...order.timestamps,
+            updated: new Date(),
+            completed: new Date()
+          }
+        };
+        onOrderUpdated(updatedOrder);
+        setShowCompletionModal(false);
+        setCompletionData({ screenshots: [], platformBank: '', notes: '' });
+        // Re-enable body scroll
+        document.body.classList.remove('modal-open');
+      }
+    } catch (error) {
+      console.error('Error completing order:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const currentStepIndex = getCurrentStepIndex();
+  // Add effect to handle modal opening/closing
+  useEffect(() => {
+    if (showCompletionModal) {
+      // Prevent body scroll when modal opens
+      document.body.classList.add('modal-open');
+    } else {
+      // Re-enable body scroll when modal closes
+      document.body.classList.remove('modal-open');
+    }
 
-  // Check if this is a terminal state (cancelled, rejected, completed)
-  const isTerminalState = ['cancelled', 'rejected', 'completed'].includes(order.status);
+    // Cleanup on unmount
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, [showCompletionModal]);
+
+  // Get allowed next statuses for this order
+  const allowedStatuses = getNextAllowedStatuses(order.status, userRole);
+
+  // Get action buttons
+  const getActionButtons = () => {
+    if (userRole !== 'admin' || allowedStatuses.length === 0) return null;
+
+    return allowedStatuses.map(status => {
+      const getButtonConfig = (status: OrderStatus): { label: string; color: string; icon: string } => {
+        switch (status) {
+          case 'processing':
+            return {
+              label: 'Approve & Process',
+              color: 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-md hover:shadow-lg transform hover:scale-105',
+              icon: '✓'
+            };
+          case 'completed':
+            return {
+              label: order.type === 'outgoing' ? 'Complete Order' : 'Mark Completed',
+              color: 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md hover:shadow-lg transform hover:scale-105',
+              icon: '🎯'
+            };
+          case 'rejected':
+            return {
+              label: 'Reject Order',
+              color: 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-md hover:shadow-lg transform hover:scale-105',
+              icon: '✕'
+            };
+          case 'cancelled':
+            return {
+              label: 'Cancel Order',
+              color: 'bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white shadow-md hover:shadow-lg transform hover:scale-105',
+              icon: '🚫'
+            };
+          default:
+            return {
+              label: status.replace('_', ' ').toUpperCase(),
+              color: 'bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white shadow-md hover:shadow-lg transform hover:scale-105',
+              icon: '⚡'
+            };
+        }
+      };
+
+      const config = getButtonConfig(status);
+      return (
+        <button
+          key={status}
+          onClick={() => handleStatusUpdate(status)}
+          disabled={loading}
+          className={`w-full px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${config.color}`}
+        >
+          <div className="flex items-center justify-center space-x-2">
+            {loading ? (
+              <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <span className="text-lg">{config.icon}</span>
+            )}
+            <span>{config.label}</span>
+          </div>
+        </button>
+      );
+    });
+  };
+
+  const actionButtons = getActionButtons();
 
   return (
-    <div className={`bg-white rounded-lg shadow-sm border ${className}`}>
-      {/* Header */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Order Workflow</h3>
-          <div className={`flex items-center px-3 py-1 rounded-full border text-sm font-medium ${getStatusColor(order.status)}`}>
-            {getStatusIcon(order.status)}
-            <span className="ml-2">{order.status.replace('_', ' ').toUpperCase()}</span>
-          </div>
-        </div>
-
-        {/* Workflow Progress */}
-        <div className="mb-6">
-          {/* Mobile Layout */}
-          <div className="block md:hidden">
-            <div className="relative">
-              {workflowSteps.map((step, index) => (
-                <div key={step.status} className="relative flex items-center pb-6 last:pb-0">
-                  {/* Vertical Line (except for last item) */}
-                  {index < workflowSteps.length - 1 && (
-                    <div className={`absolute left-5 top-10 w-0.5 h-6 ${
-                      index < currentStepIndex ? 'bg-blue-300' : 'bg-gray-300'
-                    }`}></div>
-                  )}
-                  
-                  {/* Step Circle */}
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 flex-shrink-0 z-10 ${
-                    index <= currentStepIndex 
-                      ? isTerminalState && index === currentStepIndex && (order.status === 'cancelled' || order.status === 'rejected')
-                        ? 'bg-red-500 text-white border-red-500' 
-                        : 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-gray-100 text-gray-400 border-gray-300'
-                  }`}>
-                    {index <= currentStepIndex ? (
-                      getStatusIcon(workflowSteps[index].status as OrderStatus)
-                    ) : (
-                      <span>{index + 1}</span>
-                    )}
-                  </div>
-
-                  {/* Step Content */}
-                  <div className="ml-4 flex-1">
-                    <div className={`text-sm font-semibold ${
-                      index <= currentStepIndex 
-                        ? isTerminalState && index === currentStepIndex && (order.status === 'cancelled' || order.status === 'rejected')
-                          ? 'text-red-600' 
-                          : 'text-blue-600'
-                        : 'text-gray-400'
-                    }`}>
-                      {step.label}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {step.description}
-                    </div>
-                  </div>
+    <>
+      <div className={`${className}`}>
+        {/* Action Buttons - Enhanced Mobile-First Layout */}
+        {actionButtons && actionButtons.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                Quick Actions
+              </h4>
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            </div>
+            
+            {/* Primary Actions */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {actionButtons}
+            </div>
+            
+            {/* Action Helper Text */}
+            <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3 border border-gray-100">
+              <div className="flex items-start space-x-2">
+                <svg className="w-3 h-3 text-gray-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <p className="font-medium text-gray-600">Status: {order.status.replace('_', ' ').toUpperCase()}</p>
+                  <p className="text-gray-500 mt-1">
+                    {order.status === 'submitted' && 'Review and approve this order to begin processing.'}
+                    {order.status === 'processing' && 'Order is being processed. Complete when payment is sent.'}
+                    {order.status === 'completed' && 'Order has been successfully completed.'}
+                    {order.status === 'rejected' && 'Order was rejected and cannot be processed.'}
+                    {order.status === 'cancelled' && 'Order was cancelled and will not be processed.'}
+                  </p>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
-
-          {/* Desktop Layout */}
-          <div className="hidden md:block">
-            <div className="flex items-start justify-between relative">
-              {workflowSteps.map((step, index) => (
-                <div key={step.status} className="flex flex-col items-center flex-1 relative">
-                  {/* Step Circle */}
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 ${
-                    index <= currentStepIndex 
-                      ? isTerminalState && index === currentStepIndex && (order.status === 'cancelled' || order.status === 'rejected')
-                        ? 'bg-red-500 text-white border-red-500' 
-                        : 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-gray-100 text-gray-400 border-gray-300'
-                  }`}>
-                    {index <= currentStepIndex ? (
-                      getStatusIcon(workflowSteps[index].status as OrderStatus)
-                    ) : (
-                      <span>{index + 1}</span>
-                    )}
-                  </div>
-
-                  {/* Connecting Line */}
-                  {index < workflowSteps.length - 1 && (
-                    <div className={`absolute top-5 left-1/2 w-full h-0.5 ${
-                      index < currentStepIndex 
-                        ? 'bg-blue-300' 
-                        : 'bg-gray-300'
-                    }`} style={{ transform: 'translateX(50%)' }} />
-                  )}
-
-                  {/* Step Label */}
-                  <div className="mt-3 text-center">
-                    <div className={`text-sm font-semibold ${
-                      index <= currentStepIndex 
-                        ? isTerminalState && index === currentStepIndex && (order.status === 'cancelled' || order.status === 'rejected')
-                          ? 'text-red-600' 
-                          : 'text-blue-600'
-                        : 'text-gray-400'
-                    }`}>
-                      {step.label}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1 max-w-24">
-                      {step.description}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
-    </div>
+
+      {/* Outgoing Order Completion Modal - Mobile Optimized & Scrollable */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-md sm:w-full h-[90vh] sm:max-h-[85vh] flex flex-col">
+            {/* Header - Fixed */}
+            <div className="flex-shrink-0 p-4 sm:p-6 border-b border-gray-200 bg-white rounded-t-2xl sm:rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Complete Outgoing Order
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowCompletionModal(false);
+                    document.body.classList.remove('modal-open');
+                  }}
+                  className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Progress Indicator */}
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 font-medium">
+                    Progress: {completionData.screenshots.length > 0 && completionData.platformBank ? '2/2' : 
+                              completionData.screenshots.length > 0 || completionData.platformBank ? '1/2' : '0/2'} completed
+                  </span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    completionData.screenshots.length > 0 && completionData.platformBank 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-orange-100 text-orange-800'
+                  }`}>
+                    {completionData.screenshots.length > 0 && completionData.platformBank ? 'Ready to Submit' : 'Missing Required Fields'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Content - Fully Scrollable with proper constraints */}
+            <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y modal-scroll">
+              <div className="p-4 sm:p-6 pb-6">
+                <div className="space-y-6">
+                  {/* Payment Proof Upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Payment Proof Screenshot *
+                      {completionData.screenshots.length > 0 && (
+                        <span className="ml-2 text-green-600 text-xs">✓ Uploaded</span>
+                      )}
+                    </label>
+                    <EnhancedFileUpload
+                      orderId={order.orderId}
+                      maxFiles={1}
+                      onUploadComplete={handleFileUploadComplete}
+                      className="border-2 border-dashed border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  {/* Platform Bank Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Platform Bank Used *
+                      {completionData.platformBank && (
+                        <span className="ml-2 text-green-600 text-xs">✓ Selected</span>
+                      )}
+                    </label>
+                    <select
+                      value={completionData.platformBank}
+                      onChange={(e) => setCompletionData({
+                        ...completionData,
+                        platformBank: e.target.value
+                      })}
+                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 py-3"
+                    >
+                      <option value="">Select platform bank...</option>
+                      {PLATFORM_BANKS.map(bank => (
+                        <option key={bank.id} value={bank.id}>
+                          {bank.name} ({bank.accountNumber})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Notes (Optional)
+                    </label>
+                    <textarea
+                      value={completionData.notes}
+                      onChange={(e) => setCompletionData({
+                        ...completionData,
+                        notes: e.target.value
+                      })}
+                      rows={3}
+                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Any additional notes..."
+                    />
+                  </div>
+
+                  {/* Requirements Checklist */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Required to Complete:</h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center">
+                        <div className={`w-4 h-4 rounded-full mr-3 ${
+                          completionData.screenshots.length > 0 ? 'bg-green-500' : 'bg-gray-300'
+                        }`}>
+                          {completionData.screenshots.length > 0 && (
+                            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className={`text-sm ${
+                          completionData.screenshots.length > 0 ? 'text-green-700' : 'text-gray-600'
+                        }`}>
+                          Upload payment proof screenshot
+                        </span>
+                      </div>
+                      <div className="flex items-center">
+                        <div className={`w-4 h-4 rounded-full mr-3 ${
+                          completionData.platformBank ? 'bg-green-500' : 'bg-gray-300'
+                        }`}>
+                          {completionData.platformBank && (
+                            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className={`text-sm ${
+                          completionData.platformBank ? 'text-green-700' : 'text-gray-600'
+                        }`}>
+                          Select platform bank used for payment
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Extra spacing for better scrolling */}
+                  <div className="h-4"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer - Fixed/Sticky */}
+            <div className="flex-shrink-0 p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => {
+                    setShowCompletionModal(false);
+                    document.body.classList.remove('modal-open');
+                  }}
+                  disabled={loading}
+                  className="w-full sm:w-auto px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCompleteOutgoing}
+                  disabled={loading || completionData.screenshots.length === 0 || !completionData.platformBank}
+                  className="w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md"
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                      Completing Order...
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center">
+                      <span>Complete Order</span>
+                      {completionData.screenshots.length > 0 && completionData.platformBank && (
+                        <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                      )}
+                    </div>
+                  )}
+                </button>
+              </div>
+              
+              {/* Button Help Text */}
+              {(completionData.screenshots.length === 0 || !completionData.platformBank) && (
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Complete the required fields above to enable the submit button
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

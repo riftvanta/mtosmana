@@ -24,3 +24,180 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Enhanced Real-time Notification Styles */
+@keyframes notification-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+@keyframes slide-in-notification {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out-notification {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+/* Critical notification pulse effect */
+.notification-pulse {
+  animation: notification-pulse 1s ease-out;
+}
+
+/* Enhanced notification toast styles */
+.notification-toast {
+  animation: slide-in-notification 0.3s ease-out;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border-left: 4px solid #3b82f6;
+}
+
+.notification-toast.critical {
+  border-left-color: #ef4444;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+.notification-toast.success {
+  border-left-color: #10b981;
+}
+
+.notification-toast.warning {
+  border-left-color: #f59e0b;
+}
+
+.notification-toast-exit {
+  animation: fade-out-notification 0.2s ease-in forwards;
+}
+
+/* Real-time status indicators */
+@keyframes connection-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.connection-indicator {
+  animation: connection-pulse 2s infinite;
+}
+
+.connection-indicator.connected {
+  animation: none;
+  opacity: 1;
+}
+
+/* Mobile-optimized notification styles */
+@media (max-width: 768px) {
+  .notification-toast {
+    margin: 0.5rem;
+    border-radius: 0.5rem;
+  }
+}
+
+/* Workflow status animation */
+@keyframes status-change {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.status-updated {
+  animation: status-change 0.3s ease-in-out;
+}
+
+/* Loading states for real-time components */
+@keyframes shimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
+.loading-shimmer {
+  background: linear-gradient(to right, #f6f7f8 8%, #edeef1 18%, #f6f7f8 33%);
+  background-size: 800px 104px;
+  animation: shimmer 1.2s infinite linear;
+}
+
+/* Enhanced button states for workflow actions */
+.workflow-button {
+  transition: all 0.2s ease-in-out;
+}
+
+.workflow-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.workflow-button:active {
+  transform: translateY(0);
+}
+
+.workflow-button.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* Slide in up animation for mobile cards */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Modal scrolling optimizations */
+.modal-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+
+/* Prevent body scroll when modal is open */
+.modal-open {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
+/* Better touch scrolling for iOS */
+@supports (-webkit-overflow-scrolling: touch) {
+  .modal-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+}

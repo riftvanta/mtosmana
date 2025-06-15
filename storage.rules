@@ -1,0 +1,27 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow read/write access to orders directory for authenticated users
+    match /orders/{orderId}/{category}/{fileName} {
+      allow read, write: if request.auth != null
+        && request.auth.token.role in ['admin', 'exchange']
+        && orderId.matches('[A-Z][0-9]{8}') // Match order ID format: T25060001
+        && category in ['screenshots', 'documents', 'receipts']
+        && resource.size < 5 * 1024 * 1024 // 5MB limit
+        && request.resource.contentType.matches('image/.*'); // Only images
+    }
+    
+    // Admin access to all files
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null
+        && request.auth.token.role == 'admin';
+    }
+    
+    // Deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+} 

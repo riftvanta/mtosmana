@@ -135,6 +135,15 @@
       ]
     },
     {
+      "collectionGroup": "workflowTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "scheduledAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "workflowEvents",
       "queryScope": "COLLECTION",
       "fields": [
@@ -149,6 +158,29 @@
         {"fieldPath": "userId", "order": "ASCENDING"},
         {"fieldPath": "isRead", "order": "ASCENDING"},
         {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "userId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "orderMessages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "orderId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

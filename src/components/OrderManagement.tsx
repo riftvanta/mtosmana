@@ -26,6 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import OutgoingTransferForm from './OutgoingTransferForm';
 import IncomingTransferForm from './IncomingTransferForm';
 import OrderStatusWorkflow from './OrderStatusWorkflow';
+import OrderChat from './OrderChat';
 import IndexBuildingNotice from './IndexBuildingNotice';
 
 interface OrderManagementProps {
@@ -633,6 +634,12 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
               }}
               userRole={userRole}
             />
+
+            {/* Order Chat */}
+            <OrderChat
+              orderId={selectedOrder.orderId}
+              className="mt-6"
+            />
           </div>
         ) : (
           <div className="p-8 text-center">
@@ -759,7 +766,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
         </div>
       )}
 
-      {/* Filters and Search */}
+      {/* Enhanced Filters and Search */}
       <div className="bg-white p-3 md:p-4 rounded-lg shadow border">
         <div className="space-y-3">
           {/* First line: Status and Type dropdowns */}
@@ -795,7 +802,72 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
             </div>
           </div>
 
-          {/* Second line: Search field and Clear button */}
+          {/* Second line: Date Range Filters */}
+          <div className="flex gap-2 md:gap-4">
+            <div className="flex-1">
+              <input
+                type="date"
+                placeholder="Start Date"
+                value={filters.dateRange?.start ? filters.dateRange.start.toISOString().split('T')[0] : ''}
+                onChange={(e) => {
+                  const startDate = e.target.value ? new Date(e.target.value) : undefined;
+                  handleFilterChange({
+                    dateRange: startDate ? {
+                      start: startDate,
+                      end: filters.dateRange?.end || new Date()
+                    } : undefined
+                  });
+                }}
+                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex-1">
+              <input
+                type="date"
+                placeholder="End Date"
+                value={filters.dateRange?.end ? filters.dateRange.end.toISOString().split('T')[0] : ''}
+                onChange={(e) => {
+                  const endDate = e.target.value ? new Date(e.target.value) : undefined;
+                  handleFilterChange({
+                    dateRange: endDate ? {
+                      start: filters.dateRange?.start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+                      end: endDate
+                    } : undefined
+                  });
+                }}
+                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {/* Quick Date Range Buttons */}
+            <div className="flex gap-1">
+              <button
+                onClick={() => {
+                  const endDate = new Date();
+                  const startDate = new Date();
+                  startDate.setDate(startDate.getDate() - 7);
+                  handleFilterChange({ dateRange: { start: startDate, end: endDate } });
+                }}
+                className="px-2 py-2 text-xs bg-gray-100 text-gray-700 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                title="Last 7 days"
+              >
+                7d
+              </button>
+              <button
+                onClick={() => {
+                  const endDate = new Date();
+                  const startDate = new Date();
+                  startDate.setDate(startDate.getDate() - 30);
+                  handleFilterChange({ dateRange: { start: startDate, end: endDate } });
+                }}
+                className="px-2 py-2 text-xs bg-gray-100 text-gray-700 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                title="Last 30 days"
+              >
+                30d
+              </button>
+            </div>
+          </div>
+
+          {/* Third line: Search field and Clear button */}
           <div className="flex gap-2 md:gap-4">
             <div className="flex-1 min-w-0">
               <input
@@ -814,7 +886,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
                   setCurrentPage(1);
                 }}
                 className="h-9 w-9 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
-                title="Clear Filters"
+                title="Clear All Filters"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H8a1 1 0 00-1 1v3M4 7h16" />

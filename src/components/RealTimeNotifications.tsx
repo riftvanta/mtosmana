@@ -10,7 +10,6 @@ import {
   collection,
   query,
   where,
-  orderBy,
   limit,
   onSnapshot,
   updateDoc,
@@ -23,7 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 interface RealTimeNotificationsProps {
   onNotificationClick?: (notification: Notification) => void;
   maxVisible?: number;
-  enableSounds?: boolean;
+
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
   className?: string;
 }
@@ -36,7 +35,6 @@ interface ToastNotification extends Notification {
 const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
   onNotificationClick,
   maxVisible = 5,
-  enableSounds = true,
   position = 'top-right',
   className = ''
 }) => {
@@ -52,24 +50,7 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
   });
   const [loading, setLoading] = useState(false);
   
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
-
-  // Initialize audio for notifications
-  useEffect(() => {
-    if (enableSounds && typeof window !== 'undefined') {
-      audioRef.current = new Audio('/notification-sound.mp3'); // You'd need to add this file
-      audioRef.current.volume = 0.5;
-    }
-  }, [enableSounds]);
-
-  const playNotificationSound = useCallback(() => {
-    if (enableSounds && audioRef.current) {
-      audioRef.current.play().catch(error => {
-        console.log('Could not play notification sound:', error);
-      });
-    }
-  }, [enableSounds]);
 
   const showToastNotification = useCallback((notification: Notification) => {
     const toastId = `toast-${notification.id}-${Date.now()}`;
@@ -126,49 +107,62 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
   useEffect(() => {
     if (!user) return;
 
+    // Use simpler query to avoid index requirements during development
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', user.id),
-      orderBy('createdAt', 'desc'),
-      limit(50)
+      limit(100)
     );
 
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
-        setConnectionStatus(prev => ({
-          ...prev,
-          isConnected: true,
-          isReconnecting: false,
-          connectionQuality: 'excellent',
-          lastConnectedAt: new Date()
-        }));
+              setConnectionStatus(prev => ({
+        ...prev,
+        isConnected: true,
+        isReconnecting: false,
+        connectionQuality: 'excellent',
+        lastConnectedAt: new Date()
+      }));
 
-        const notificationsData: Notification[] = [];
-        
-        snapshot.docChanges().forEach((change) => {
-          const notification = {
-            id: change.doc.id,
-            ...change.doc.data()
-          } as Notification;
+      const notificationsData: Notification[] = [];
+      
+      snapshot.docChanges().forEach((change) => {
+        const notification = {
+          id: change.doc.id,
+          ...change.doc.data()
+        } as Notification;
 
-          if (change.type === 'added') {
-            notificationsData.push(notification);
-            
-            // Show toast for new notifications
-            if (!notification.isRead) {
-              showToastNotification(notification);
-              playNotificationSound();
+        if (change.type === 'added') {
+          notificationsData.push(notification);
+          
+          // Show enhanced toast for new notifications with better visual feedback
+          if (!notification.isRead) {
+            showToastNotification(notification);
+            // Add visual pulse effect for important notifications
+            if (notification.priority === 'critical') {
+              document.body.classList.add('notification-pulse');
+              setTimeout(() => {
+                document.body.classList.remove('notification-pulse');
+              }, 1000);
             }
           }
-        });
+        }
+      });
 
-        // Update all notifications
+        // Update all notifications and sort in memory
         const allNotifications = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as Notification[];
+        
+        // Sort by createdAt in memory to avoid index requirement
+        allNotifications.sort((a, b) => {
+          const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+          const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+          return bTime - aTime;
+        });
 
-        setNotifications(allNotifications);
+        setNotifications(allNotifications.slice(0, 50));
         setUnreadCount(allNotifications.filter(n => !n.isRead).length);
       },
       (error) => {
@@ -189,7 +183,7 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
         unsubscribeRef.current();
       }
     };
-  }, [user, playNotificationSound, showToastNotification]);
+  }, [user, showToastNotification]);
 
   // Connection monitoring
   useEffect(() => {
